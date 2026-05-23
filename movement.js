@@ -47,15 +47,12 @@ MovementSystem.Grid = {
 
                 for(const wall of walls){
 
-                    // グリッド全体が壁内部なら blocked
+                    // 【修正箇所1】完全に内包されているかではなく、1ピクセルでも重なっていれば（交差していれば）壁とする標準的なAABB判定
                     if(
-
-                        cellX >= wall.x &&
-                        cellRight <= wall.x + wall.w &&
-
-                        cellY >= wall.y &&
-                        cellBottom <= wall.y + wall.h
-
+                        cellX < wall.x + wall.w &&
+                        cellRight > wall.x &&
+                        cellY < wall.y + wall.h &&
+                        cellBottom > wall.y
                     ){
 
                         blocked = true;
@@ -300,8 +297,9 @@ function(gx, gy){
     return best;
 };
 
+// 【修正箇所2】引数に game を追加し、グリッドサイズから動的に半径を計算できるようにする
 MovementSystem.hasLineOfSight =
-function(x1, y1, x2, y2, walls){
+function(x1, y1, x2, y2, walls, game){
 
     const dx = x2 - x1;
     const dy = y2 - y1;
@@ -313,6 +311,10 @@ function(x1, y1, x2, y2, walls){
 
     const steps =
         Math.ceil(distance / step);
+
+    // 【修正箇所2】ハードコードされた 10 をやめ、グリッドサイズの40%程度の太さのレイキャストにする
+    // （もしgameが渡されなかった場合のフォールバックとして10を残す）
+    const rayRadius = game ? (game.gridSize * 0.4) : 10;
 
     for(let i = 0; i <= steps; i++){
 
@@ -333,7 +335,7 @@ function(x1, y1, x2, y2, walls){
             MovementSystem.isCollidingWithWall(
                 x,
                 y,
-                10,
+                rayRadius,
                 walls
             )
         ){
@@ -345,8 +347,9 @@ function(x1, y1, x2, y2, walls){
     return true;
 };
 
+// 【修正箇所2】hasLineOfSight に game を渡すため、引数に game を追加
 MovementSystem.smoothPath =
-function(path, walls){
+function(path, walls, game){
 
     if(path.length <= 2){
 
@@ -378,7 +381,8 @@ function(path, walls){
                     a.y,
                     b.x,
                     b.y,
-                    walls
+                    walls,
+                    game // 【修正箇所2】
                 )
             ){
 
@@ -507,10 +511,12 @@ function(startX, startY, goalX, goalY, game){
             current.x === goalGX &&
             current.y === goalGY
         ){
-
+            
+            // 【修正箇所2】smoothPath に game オブジェクトを渡す
             return MovementSystem.smoothPath(
                 buildPath(current, game),
-                window.walls
+                window.walls,
+                game
             );
         }
 
@@ -618,10 +624,12 @@ function(startX, startY, goalX, goalY, game){
     }
 
     if(closestNode){
-
+        
+        // 【修正箇所2】smoothPath に game オブジェクトを渡す
         return MovementSystem.smoothPath(
             buildPath(closestNode, game),
-            window.walls
+            window.walls,
+            game
         );
     }
 
