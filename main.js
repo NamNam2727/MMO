@@ -7,6 +7,19 @@ window.startGame = function(){
 "use strict";
 
 /* =========================================================
+   DEBUG
+========================================================= */
+
+const debug =
+    document.getElementById("debug");
+
+if(debug){
+
+    debug.innerHTML =
+        "Game Started";
+}
+
+/* =========================================================
    CANVAS
 ========================================================= */
 
@@ -236,6 +249,7 @@ function render(){
         canvas.height
     );
 
+    // 背景
     ctx.fillStyle = "#2f5d3a";
 
     ctx.fillRect(
