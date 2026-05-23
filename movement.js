@@ -31,18 +31,25 @@ MovementSystem.Grid = {
 
             for(let x=0; x<this.cols; x++){
 
-                const worldX = x * game.gridSize;
-                const worldY = y * game.gridSize;
+                const cellX = x * game.gridSize;
+                const cellY = y * game.gridSize;
 
                 let blocked = false;
 
                 for(const wall of walls){
 
+                    // グリッド中心点で判定
+                    const centerX =
+                        cellX + game.gridSize / 2;
+
+                    const centerY =
+                        cellY + game.gridSize / 2;
+
                     if(
-                        worldX < wall.x + wall.w &&
-                        worldX + game.gridSize > wall.x &&
-                        worldY < wall.y + wall.h &&
-                        worldY + game.gridSize > wall.y
+                        centerX >= wall.x &&
+                        centerX <= wall.x + wall.w &&
+                        centerY >= wall.y &&
+                        centerY <= wall.y + wall.h
                     ){
                         blocked = true;
                         break;
@@ -108,6 +115,7 @@ function(entity, moveX, moveY, walls){
     const nextX = entity.x + moveX;
     const nextY = entity.y + moveY;
 
+    // XY移動
     if(
         !MovementSystem.isCollidingWithWall(
             nextX,
@@ -123,6 +131,7 @@ function(entity, moveX, moveY, walls){
         return true;
     }
 
+    // Xのみ
     if(
         !MovementSystem.isCollidingWithWall(
             nextX,
@@ -137,6 +146,7 @@ function(entity, moveX, moveY, walls){
         return true;
     }
 
+    // Yのみ
     if(
         !MovementSystem.isCollidingWithWall(
             entity.x,
@@ -183,7 +193,7 @@ function(x, y, radius, walls){
 
         if(dist < radius){
 
-            const push = radius - dist + 1;
+            const push = radius - dist + 0.5;
 
             const nx = dx / (dist || 1);
             const ny = dy / (dist || 1);
@@ -216,7 +226,10 @@ function(gx, gy){
         };
     }
 
-    const maxRadius = 6;
+    const maxRadius = 12;
+
+    let best = null;
+    let bestDist = Infinity;
 
     for(let r = 1; r <= maxRadius; r++){
 
@@ -228,10 +241,19 @@ function(gx, gy){
                 const ny = gy + y;
 
                 if(
-                    !MovementSystem.Grid.isBlocked(nx, ny)
+                    MovementSystem.Grid.isBlocked(nx, ny)
                 ){
+                    continue;
+                }
 
-                    return {
+                const dist =
+                    Math.hypot(x, y);
+
+                if(dist < bestDist){
+
+                    bestDist = dist;
+
+                    best = {
                         x: nx,
                         y: ny
                     };
@@ -240,7 +262,7 @@ function(gx, gy){
         }
     }
 
-    return null;
+    return best;
 };
 
 MovementSystem.hasLineOfSight =
@@ -251,12 +273,14 @@ function(x1, y1, x2, y2, walls){
 
     const distance = Math.hypot(dx, dy);
 
-    const step = 16;
+    const step = 8;
 
-    const steps = Math.ceil(distance / step);
+    const steps =
+        Math.ceil(distance / step);
 
     for(let i = 0; i <= steps; i++){
 
+        // 開始地点付近は無視
         if(i <= 1){
             continue;
         }
@@ -298,9 +322,13 @@ function(path, walls){
 
     while(current < path.length - 1){
 
-        let next = path.length - 1;
+        let next = current + 1;
 
-        for(let i = path.length - 1; i > current; i--){
+        for(
+            let i = path.length - 1;
+            i > current;
+            i--
+        ){
 
             const a = path[current];
             const b = path[i];
@@ -314,6 +342,7 @@ function(path, walls){
                     walls
                 )
             ){
+
                 next = i;
                 break;
             }
@@ -378,26 +407,39 @@ function(startX, startY, goalX, goalY, game){
     let closestDist = Infinity;
 
     open.push({
+
         x:startGX,
         y:startGY,
+
         g:0,
         h:0,
         f:0,
+
         parent:null
     });
 
     const dirs = [
+
         [ 1, 0],
         [-1, 0],
         [ 0, 1],
         [ 0,-1],
+
         [ 1, 1],
         [ 1,-1],
         [-1, 1],
         [-1,-1]
     ];
 
-    while(open.length > 0){
+    let loop = 0;
+    const maxLoop = 4000;
+
+    while(
+        open.length > 0 &&
+        loop < maxLoop
+    ){
+
+        loop++;
 
         open.sort((a,b)=>a.f-b.f);
 
@@ -436,21 +478,36 @@ function(startX, startY, goalX, goalY, game){
             const nx = current.x + dir[0];
             const ny = current.y + dir[1];
 
-            const nkey = nx + "," + ny;
+            const nkey =
+                nx + "," + ny;
 
-            if(closed[nkey]) continue;
+            if(closed[nkey]){
+
+                continue;
+            }
 
             if(
-                MovementSystem.Grid.isBlocked(nx, ny)
-            ) continue;
+                MovementSystem.Grid.isBlocked(
+                    nx,
+                    ny
+                )
+            ){
 
-            if(dir[0] !== 0 && dir[1] !== 0){
+                continue;
+            }
+
+            // 斜めすり抜け禁止
+            if(
+                dir[0] !== 0 &&
+                dir[1] !== 0
+            ){
 
                 if(
                     MovementSystem.Grid.isBlocked(
                         current.x + dir[0],
                         current.y
                     ) ||
+
                     MovementSystem.Grid.isBlocked(
                         current.x,
                         current.y + dir[1]
@@ -462,11 +519,18 @@ function(startX, startY, goalX, goalY, game){
 
             const g =
                 current.g +
-                ((dir[0] !== 0 && dir[1] !== 0) ? 1.4 : 1);
+                (
+                    (
+                        dir[0] !== 0 &&
+                        dir[1] !== 0
+                    ) ? 1.4 : 1
+                );
 
             const h =
-                Math.abs(goalGX - nx) +
-                Math.abs(goalGY - ny);
+                Math.hypot(
+                    goalGX - nx,
+                    goalGY - ny
+                );
 
             const f = g + h;
 
@@ -474,7 +538,10 @@ function(startX, startY, goalX, goalY, game){
 
             for(const node of open){
 
-                if(node.x === nx && node.y === ny){
+                if(
+                    node.x === nx &&
+                    node.y === ny
+                ){
 
                     exists = true;
 
@@ -492,11 +559,14 @@ function(startX, startY, goalX, goalY, game){
             if(!exists){
 
                 open.push({
+
                     x:nx,
                     y:ny,
+
                     g,
                     h,
                     f,
+
                     parent:current
                 });
             }
@@ -514,12 +584,13 @@ function(startX, startY, goalX, goalY, game){
     return [];
 };
 
+/* =========================================================
+   BUILD PATH
+========================================================= */
+
 function buildPath(node, game){
 
     const path = [];
-
-    const radius =
-        window.Game.player.radius;
 
     while(node){
 
@@ -527,11 +598,11 @@ function buildPath(node, game){
 
             x:
                 node.x * game.gridSize +
-                radius,
+                game.gridSize / 2,
 
             y:
                 node.y * game.gridSize +
-                radius
+                game.gridSize / 2
         });
 
         node = node.parent;
