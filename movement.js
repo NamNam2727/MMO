@@ -518,17 +518,20 @@ function buildPath(node, game){
 
     const path = [];
 
+    const radius =
+        window.Game.player.radius;
+
     while(node){
 
         path.push({
 
             x:
                 node.x * game.gridSize +
-                game.gridSize / 2,
+                radius,
 
             y:
                 node.y * game.gridSize +
-                game.gridSize / 2
+                radius
         });
 
         node = node.parent;
