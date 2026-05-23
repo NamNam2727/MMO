@@ -31,32 +31,40 @@ MovementSystem.Grid = {
 
             for(let x=0; x<this.cols; x++){
 
-                const cellX = x * game.gridSize;
-                const cellY = y * game.gridSize;
+                const cellX =
+                    x * game.gridSize;
+
+                const cellY =
+                    y * game.gridSize;
+
+                const cellRight =
+                    cellX + game.gridSize;
+
+                const cellBottom =
+                    cellY + game.gridSize;
 
                 let blocked = false;
 
                 for(const wall of walls){
 
-                    // グリッド中心点で判定
-                    const centerX =
-                        cellX + game.gridSize / 2;
-
-                    const centerY =
-                        cellY + game.gridSize / 2;
-
+                    // グリッド全体が壁内部なら blocked
                     if(
-                        centerX >= wall.x &&
-                        centerX <= wall.x + wall.w &&
-                        centerY >= wall.y &&
-                        centerY <= wall.y + wall.h
+
+                        cellX >= wall.x &&
+                        cellRight <= wall.x + wall.w &&
+
+                        cellY >= wall.y &&
+                        cellBottom <= wall.y + wall.h
+
                     ){
+
                         blocked = true;
                         break;
                     }
                 }
 
-                this.map[y][x] = blocked ? 1 : 0;
+                this.map[y][x] =
+                    blocked ? 1 : 0;
             }
         }
     },
@@ -87,18 +95,25 @@ function(x, y, radius, walls){
 
         const nearestX = Math.max(
             wall.x,
-            Math.min(x, wall.x + wall.w)
+            Math.min(
+                x,
+                wall.x + wall.w
+            )
         );
 
         const nearestY = Math.max(
             wall.y,
-            Math.min(y, wall.y + wall.h)
+            Math.min(
+                y,
+                wall.y + wall.h
+            )
         );
 
         const dx = x - nearestX;
         const dy = y - nearestY;
 
-        const dist = Math.hypot(dx, dy);
+        const dist =
+            Math.hypot(dx, dy);
 
         if(dist < radius){
 
@@ -112,8 +127,11 @@ function(x, y, radius, walls){
 MovementSystem.moveWithCollision =
 function(entity, moveX, moveY, walls){
 
-    const nextX = entity.x + moveX;
-    const nextY = entity.y + moveY;
+    const nextX =
+        entity.x + moveX;
+
+    const nextY =
+        entity.y + moveY;
 
     // XY移動
     if(
@@ -178,25 +196,36 @@ function(x, y, radius, walls){
 
         const nearestX = Math.max(
             wall.x,
-            Math.min(safeX, wall.x + wall.w)
+            Math.min(
+                safeX,
+                wall.x + wall.w
+            )
         );
 
         const nearestY = Math.max(
             wall.y,
-            Math.min(safeY, wall.y + wall.h)
+            Math.min(
+                safeY,
+                wall.y + wall.h
+            )
         );
 
         const dx = safeX - nearestX;
         const dy = safeY - nearestY;
 
-        const dist = Math.hypot(dx, dy);
+        const dist =
+            Math.hypot(dx, dy);
 
         if(dist < radius){
 
-            const push = radius - dist + 0.5;
+            const push =
+                radius - dist + 0.5;
 
-            const nx = dx / (dist || 1);
-            const ny = dy / (dist || 1);
+            const nx =
+                dx / (dist || 1);
+
+            const ny =
+                dy / (dist || 1);
 
             safeX += nx * push;
             safeY += ny * push;
@@ -217,7 +246,10 @@ MovementSystem.findNearestWalkable =
 function(gx, gy){
 
     if(
-        !MovementSystem.Grid.isBlocked(gx, gy)
+        !MovementSystem.Grid.isBlocked(
+            gx,
+            gy
+        )
     ){
 
         return {
@@ -241,7 +273,10 @@ function(gx, gy){
                 const ny = gy + y;
 
                 if(
-                    MovementSystem.Grid.isBlocked(nx, ny)
+                    MovementSystem.Grid.isBlocked(
+                        nx,
+                        ny
+                    )
                 ){
                     continue;
                 }
@@ -271,7 +306,8 @@ function(x1, y1, x2, y2, walls){
     const dx = x2 - x1;
     const dy = y2 - y1;
 
-    const distance = Math.hypot(dx, dy);
+    const distance =
+        Math.hypot(dx, dy);
 
     const step = 8;
 
@@ -287,8 +323,11 @@ function(x1, y1, x2, y2, walls){
 
         const t = i / steps;
 
-        const x = x1 + dx * t;
-        const y = y1 + dy * t;
+        const x =
+            x1 + dx * t;
+
+        const y =
+            y1 + dy * t;
 
         if(
             MovementSystem.isCollidingWithWall(
@@ -363,7 +402,8 @@ function(path, walls){
 MovementSystem.findPath =
 function(startX, startY, goalX, goalY, game){
 
-    const gridSize = game.gridSize;
+    const gridSize =
+        game.gridSize;
 
     const rawStartGX =
         Math.floor(startX / gridSize);
@@ -443,7 +483,8 @@ function(startX, startY, goalX, goalY, game){
 
         open.sort((a,b)=>a.f-b.f);
 
-        const current = open.shift();
+        const current =
+            open.shift();
 
         const key =
             current.x + "," + current.y;
@@ -475,8 +516,11 @@ function(startX, startY, goalX, goalY, game){
 
         for(const dir of dirs){
 
-            const nx = current.x + dir[0];
-            const ny = current.y + dir[1];
+            const nx =
+                current.x + dir[0];
+
+            const ny =
+                current.y + dir[1];
 
             const nkey =
                 nx + "," + ny;
