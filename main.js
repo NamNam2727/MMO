@@ -1,72 +1,60 @@
 // =========================================================
 // main.js
-// プレイヤー中央固定カメラ版
+// html版完全維持版
 // =========================================================
 
-window.startGame = function(){
+(() => {
 
 "use strict";
-
-/* =========================================================
-   DEBUG
-========================================================= */
-
-const debug =
-    document.getElementById("debug");
-
-if(debug){
-
-    debug.innerHTML =
-        "Game Started";
-}
 
 /* =========================================================
    CANVAS
 ========================================================= */
 
-const canvas =
-    document.getElementById("game");
-
-const ctx =
-    canvas.getContext("2d");
-
-/* =========================================================
-   RESIZE
-========================================================= */
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
 
 function resize(){
 
-    canvas.width =
-        window.innerWidth;
-
-    canvas.height =
-        window.innerHeight;
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
 }
 
-window.addEventListener(
-    "resize",
-    resize
-);
+window.addEventListener("resize", resize);
 
 resize();
 
 /* =========================================================
-   WORLD
+   GAME
 ========================================================= */
 
-window.Game = {
+const Game = {
+
+    lastTime: 0,
+
+    entities: [],
 
     worldWidth: 2400,
     worldHeight: 2400,
 
-    gridSize: 32
+    gridSize: 32,
+
+    enemy: null,
+    player: null,
+
+    camera: {
+        x: 0,
+        y: 0
+    }
 };
+
+window.Game = Game;
 
 /* =========================================================
    WALLS
 ========================================================= */
 
-window.walls = [
+const walls = [
 
     {x:400, y:300, w:220, h:120},
     {x:900, y:500, w:120, h:260},
@@ -74,161 +62,561 @@ window.walls = [
     {x:700, y:1200, w:160, h:300}
 ];
 
+window.walls = walls;
+
+/* =========================================================
+   GRID INIT
+========================================================= */
+
+MovementSystem.Grid.init(Game, walls);
+
+/* =========================================================
+   INPUT
+========================================================= */
+
+const Input = {
+
+    pointerDown:false,
+
+    dragStartX:0,
+    dragStartY:0,
+
+    dragging:false
+};
+
+canvas.addEventListener("pointerdown", onPointerDown);
+canvas.addEventListener("pointermove", onPointerMove);
+canvas.addEventListener("pointerup", onPointerUp);
+canvas.addEventListener("pointercancel", onPointerUp);
+
+function screenToWorld(x, y){
+
+    return {
+        x: x + Game.camera.x,
+        y: y + Game.camera.y
+    };
+}
+
+function getPointerPosition(e){
+
+    const rect = canvas.getBoundingClientRect();
+
+    return {
+        x: e.clientX - rect.left,
+        y: e.clientY - rect.top
+    };
+}
+
+function onPointerDown(e){
+
+    const pos = getPointerPosition(e);
+    const world = screenToWorld(pos.x, pos.y);
+
+    Input.pointerDown = true;
+
+    Input.dragStartX = pos.x;
+    Input.dragStartY = pos.y;
+
+    if(Game.enemy && !Game.enemy.dead){
+
+        const dx = world.x - Game.enemy.x;
+        const dy = world.y - Game.enemy.y;
+
+        const dist = Math.hypot(dx, dy);
+
+        if(dist <= Game.enemy.radius){
+
+            Battle.setTarget(Game.enemy);
+            return;
+        }
+    }
+
+    Battle.clearTarget();
+
+    Game.player.moveTo(world.x, world.y);
+}
+
+function onPointerMove(e){
+
+    if(!Input.pointerDown) return;
+
+    const pos = getPointerPosition(e);
+
+    const dx = pos.x - Input.dragStartX;
+    const dy = pos.y - Input.dragStartY;
+
+    const dist = Math.hypot(dx, dy);
+
+    if(dist > 12){
+
+        Input.dragging = true;
+
+        Battle.clearTarget();
+
+        Game.player.setDragMove(dx, dy);
+    }
+}
+
+function onPointerUp(){
+
+    Input.pointerDown = false;
+
+    Input.dragging = false;
+
+    Game.player.dragMoving = false;
+}
+
 /* =========================================================
    PLAYER
 ========================================================= */
 
-const player = {
+const Player = {
 
-    x: 1200,
-    y: 1200,
+    x:200,
+    y:200,
 
-    radius: 18,
+    radius:18,
 
-    moveSpeed: 220,
+    moveSpeed:180,
 
-    moving: false,
-    dragMoving: false,
+    moving:false,
 
-    dragDirX: 0,
-    dragDirY: 0,
+    dragMoving:false,
 
-    path: [],
-    pathIndex: 0
+    dragDirX:0,
+    dragDirY:0,
+
+    path:[],
+    pathIndex:0,
+
+    attackRange:70,
+
+    attackCooldown:0.8,
+    attackTimer:0,
+
+    autoAttacking:false,
+
+    update(dt){
+
+        this.updateMovement(dt);
+        this.updateAttack(dt);
+    },
+
+    updateMovement(dt){
+
+        if(this.dragMoving){
+
+            const moveX =
+                this.dragDirX * this.moveSpeed * dt;
+
+            const moveY =
+                this.dragDirY * this.moveSpeed * dt;
+
+            MovementSystem.moveWithCollision(
+                this,
+                moveX,
+                moveY,
+                walls
+            );
+
+            return;
+        }
+
+        if(!this.moving) return;
+
+        const target = this.path[this.pathIndex];
+
+        if(!target){
+
+            this.moving = false;
+            return;
+        }
+
+        const dx = target.x - this.x;
+        const dy = target.y - this.y;
+
+        const dist = Math.hypot(dx, dy);
+
+        if(dist < 6){
+
+            this.pathIndex++;
+
+            if(this.pathIndex >= this.path.length){
+
+                this.moving = false;
+            }
+
+            return;
+        }
+
+        const nx = dx / dist;
+        const ny = dy / dist;
+
+        const moveX =
+            nx * this.moveSpeed * dt;
+
+        const moveY =
+            ny * this.moveSpeed * dt;
+
+        MovementSystem.moveWithCollision(
+            this,
+            moveX,
+            moveY,
+            walls
+        );
+    },
+
+    updateAttack(dt){
+
+        if(!this.autoAttacking) return;
+
+        const enemy = Battle.target;
+
+        if(!enemy || enemy.dead){
+
+            this.autoAttacking = false;
+            return;
+        }
+
+        const dx = enemy.x - this.x;
+        const dy = enemy.y - this.y;
+
+        const dist = Math.hypot(dx, dy);
+
+        if(dist > this.attackRange){
+
+            this.moveTo(enemy.x, enemy.y);
+            return;
+        }
+
+        this.moving = false;
+
+        this.attackTimer -= dt;
+
+        if(this.attackTimer <= 0){
+
+            this.attackTimer = this.attackCooldown;
+
+            Battle.damageEnemy(enemy, 10);
+        }
+    },
+
+    moveTo(x, y){
+
+        this.dragMoving = false;
+
+        const safePos =
+            MovementSystem.getSafePosition(
+                this.x,
+                this.y,
+                this.radius,
+                walls
+            );
+
+        this.path =
+            MovementSystem.findPath(
+                safePos.x,
+                safePos.y,
+                x,
+                y,
+                Game
+            );
+
+        this.pathIndex = 0;
+
+        this.moving = this.path.length > 0;
+    },
+
+    setDragMove(dx, dy){
+
+        const dist = Math.hypot(dx, dy);
+
+        if(dist <= 0) return;
+
+        this.dragDirX = dx / dist;
+        this.dragDirY = dy / dist;
+
+        this.dragMoving = true;
+
+        this.moving = false;
+    },
+
+    render(ctx){
+
+        const screenX = this.x - Game.camera.x;
+        const screenY = this.y - Game.camera.y;
+
+        ctx.beginPath();
+        ctx.fillStyle = "#4da6ff";
+
+        ctx.arc(
+            screenX,
+            screenY,
+            this.radius,
+            0,
+            Math.PI * 2
+        );
+
+        ctx.fill();
+
+        for(const point of this.path){
+
+            ctx.beginPath();
+
+            ctx.fillStyle = "#ffffff";
+
+            ctx.arc(
+                point.x - Game.camera.x,
+                point.y - Game.camera.y,
+                3,
+                0,
+                Math.PI * 2
+            );
+
+            ctx.fill();
+        }
+    }
+};
+
+/* =========================================================
+   ENEMY
+========================================================= */
+
+function createEnemy(x, y){
+
+    return {
+
+        x,
+        y,
+
+        radius:20,
+
+        maxHp:100,
+        hp:100,
+
+        dead:false,
+
+        update(){},
+
+        render(ctx){
+
+            if(this.dead) return;
+
+            const screenX = this.x - Game.camera.x;
+            const screenY = this.y - Game.camera.y;
+
+            ctx.beginPath();
+
+            ctx.fillStyle = "#ff6666";
+
+            ctx.arc(
+                screenX,
+                screenY,
+                this.radius,
+                0,
+                Math.PI * 2
+            );
+
+            ctx.fill();
+
+            const width = 50;
+            const hpRate = this.hp / this.maxHp;
+
+            ctx.fillStyle = "#000";
+
+            ctx.fillRect(
+                screenX - 25,
+                screenY - 38,
+                width,
+                6
+            );
+
+            ctx.fillStyle = "#00ff00";
+
+            ctx.fillRect(
+                screenX - 25,
+                screenY - 38,
+                width * hpRate,
+                6
+            );
+
+            if(Battle.target === this){
+
+                ctx.beginPath();
+
+                ctx.strokeStyle = "#ffff00";
+                ctx.lineWidth = 3;
+
+                ctx.arc(
+                    screenX,
+                    screenY,
+                    this.radius + 8,
+                    0,
+                    Math.PI * 2
+                );
+
+                ctx.stroke();
+            }
+        }
+    };
+}
+
+/* =========================================================
+   BATTLE
+========================================================= */
+
+const Battle = {
+
+    target:null,
+
+    setTarget(enemy){
+
+        if(enemy.dead) return;
+
+        this.target = enemy;
+
+        Game.player.autoAttacking = true;
+    },
+
+    clearTarget(){
+
+        this.target = null;
+
+        Game.player.autoAttacking = false;
+    },
+
+    damageEnemy(enemy, damage){
+
+        if(enemy.dead) return;
+
+        enemy.hp -= damage;
+
+        if(enemy.hp <= 0){
+
+            enemy.hp = 0;
+
+            enemy.dead = true;
+
+            this.clearTarget();
+
+            setTimeout(() => {
+
+                enemy.dead = false;
+                enemy.hp = enemy.maxHp;
+
+                enemy.x =
+                    300 + Math.random() * 1500;
+
+                enemy.y =
+                    300 + Math.random() * 1500;
+
+            }, 3000);
+        }
+    }
 };
 
 /* =========================================================
    CAMERA
 ========================================================= */
 
-const camera = {
+function updateCamera(){
 
-    x: 0,
-    y: 0
-};
+    Game.camera.x =
+        Game.player.x - canvas.width / 2;
+
+    Game.camera.y =
+        Game.player.y - canvas.height / 2;
+
+    Game.camera.x = Math.max(
+        0,
+        Math.min(
+            Game.camera.x,
+            Game.worldWidth - canvas.width
+        )
+    );
+
+    Game.camera.y = Math.max(
+        0,
+        Math.min(
+            Game.camera.y,
+            Game.worldHeight - canvas.height
+        )
+    );
+}
 
 /* =========================================================
-   GRID INIT
+   INITIALIZE
 ========================================================= */
 
-MovementSystem.Grid.init();
+Game.player = Player;
+
+Game.enemy = createEnemy(900, 700);
+
+Game.entities.push(Game.player);
+Game.entities.push(Game.enemy);
 
 /* =========================================================
-   INPUT
+   BACKGROUND
 ========================================================= */
 
-let pointerDown = false;
+function drawBackground(){
 
-let dragStartX = 0;
-let dragStartY = 0;
+    const grid = 48;
 
-let dragging = false;
+    ctx.strokeStyle = "rgba(255,255,255,0.05)";
+    ctx.lineWidth = 1;
 
-canvas.addEventListener(
-    "pointerdown",
-    e => {
+    const startX =
+        -(Game.camera.x % grid);
 
-        pointerDown = true;
+    const startY =
+        -(Game.camera.y % grid);
 
-        dragStartX = e.clientX;
-        dragStartY = e.clientY;
+    for(let x=startX; x<canvas.width; x+=grid){
 
-        dragging = false;
+        ctx.beginPath();
+        ctx.moveTo(x,0);
+        ctx.lineTo(x,canvas.height);
+        ctx.stroke();
     }
-);
 
-canvas.addEventListener(
-    "pointermove",
-    e => {
+    for(let y=startY; y<canvas.height; y+=grid){
 
-        if(!pointerDown){
-            return;
-        }
-
-        const dx =
-            e.clientX - dragStartX;
-
-        const dy =
-            e.clientY - dragStartY;
-
-        const dist =
-            Math.hypot(dx, dy);
-
-        if(dist > 10){
-
-            dragging = true;
-
-            MovementSystem.setDragMove(
-                player,
-                dx,
-                dy
-            );
-        }
+        ctx.beginPath();
+        ctx.moveTo(0,y);
+        ctx.lineTo(canvas.width,y);
+        ctx.stroke();
     }
-);
+}
 
-canvas.addEventListener(
-    "pointerup",
-    e => {
+function drawWalls(){
 
-        pointerDown = false;
+    ctx.fillStyle = "#555";
 
-        if(dragging){
+    for(const wall of walls){
 
-            player.dragMoving = false;
-
-            return;
-        }
-
-        // プレイヤー中心基準
-        const worldX =
-            player.x +
-            (e.clientX - canvas.width / 2);
-
-        const worldY =
-            player.y +
-            (e.clientY - canvas.height / 2);
-
-        MovementSystem.moveTo(
-            player,
-            worldX,
-            worldY
+        ctx.fillRect(
+            wall.x - Game.camera.x,
+            wall.y - Game.camera.y,
+            wall.w,
+            wall.h
         );
     }
-);
+}
 
 /* =========================================================
-   UPDATE
+   GAME LOOP
 ========================================================= */
-
-let lastTime = 0;
 
 function update(dt){
 
-    MovementSystem.updateMovement(
-        player,
-        dt
-    );
+    for(const entity of Game.entities){
+
+        entity.update(dt);
+    }
 
     updateCamera();
 }
-
-/* =========================================================
-   CAMERA UPDATE
-========================================================= */
-
-function updateCamera(){
-
-    camera.x =
-        player.x - canvas.width / 2;
-
-    camera.y =
-        player.y - canvas.height / 2;
-}
-
-/* =========================================================
-   RENDER
-========================================================= */
 
 function render(){
 
@@ -239,168 +627,30 @@ function render(){
         canvas.height
     );
 
-    // 背景
-    ctx.fillStyle = "#2f5d3a";
+    drawBackground();
 
-    ctx.fillRect(
-        0,
-        0,
-        canvas.width,
-        canvas.height
-    );
+    drawWalls();
 
-    ctx.save();
+    for(const entity of Game.entities){
 
-    // ワールドを逆方向へ移動
-    ctx.translate(
-        -camera.x,
-        -camera.y
-    );
-
-    renderGrid();
-    renderWorld();
-    renderPlayer();
-
-    ctx.restore();
-}
-
-/* =========================================================
-   GRID
-========================================================= */
-
-function renderGrid(){
-
-    ctx.strokeStyle =
-        "rgba(255,255,255,0.05)";
-
-    ctx.lineWidth = 1;
-
-    const size =
-        Game.gridSize;
-
-    for(
-        let x = 0;
-        x <= Game.worldWidth;
-        x += size
-    ){
-
-        ctx.beginPath();
-
-        ctx.moveTo(
-            x,
-            0
-        );
-
-        ctx.lineTo(
-            x,
-            Game.worldHeight
-        );
-
-        ctx.stroke();
-    }
-
-    for(
-        let y = 0;
-        y <= Game.worldHeight;
-        y += size
-    ){
-
-        ctx.beginPath();
-
-        ctx.moveTo(
-            0,
-            y
-        );
-
-        ctx.lineTo(
-            Game.worldWidth,
-            y
-        );
-
-        ctx.stroke();
+        entity.render(ctx);
     }
 }
-
-/* =========================================================
-   WORLD
-========================================================= */
-
-function renderWorld(){
-
-    ctx.fillStyle = "#666";
-
-    for(const wall of walls){
-
-        ctx.fillRect(
-            wall.x,
-            wall.y,
-            wall.w,
-            wall.h
-        );
-    }
-}
-
-/* =========================================================
-   PLAYER
-========================================================= */
-
-function renderPlayer(){
-
-    ctx.beginPath();
-
-    ctx.fillStyle = "#4da6ff";
-
-    ctx.arc(
-        player.x,
-        player.y,
-        player.radius,
-        0,
-        Math.PI * 2
-    );
-
-    ctx.fill();
-
-    // 中心点
-    ctx.beginPath();
-
-    ctx.fillStyle = "#ffffff";
-
-    ctx.arc(
-        player.x,
-        player.y,
-        3,
-        0,
-        Math.PI * 2
-    );
-
-    ctx.fill();
-}
-
-/* =========================================================
-   LOOP
-========================================================= */
 
 function gameLoop(timestamp){
 
     const dt =
-        Math.min(
-            (timestamp - lastTime) / 1000,
-            0.033
-        );
+        (timestamp - Game.lastTime) / 1000;
 
-    lastTime = timestamp;
+    Game.lastTime = timestamp;
 
     update(dt);
 
     render();
 
-    requestAnimationFrame(
-        gameLoop
-    );
+    requestAnimationFrame(gameLoop);
 }
 
-requestAnimationFrame(
-    gameLoop
-);
+requestAnimationFrame(gameLoop);
 
-};
+})();

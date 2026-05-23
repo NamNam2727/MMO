@@ -1,16 +1,80 @@
-// =========================================================
-// movement.js
-// =========================================================
-
-window.MovementSystem = (() => {
+(function(){
 
 "use strict";
+
+window.MovementSystem = {};
+
+/* =========================================================
+   GRID
+========================================================= */
+
+MovementSystem.Grid = {
+
+    cols: 0,
+    rows: 0,
+
+    map: [],
+
+    init(game, walls){
+
+        this.cols =
+            Math.ceil(game.worldWidth / game.gridSize);
+
+        this.rows =
+            Math.ceil(game.worldHeight / game.gridSize);
+
+        this.map = [];
+
+        for(let y=0; y<this.rows; y++){
+
+            this.map[y] = [];
+
+            for(let x=0; x<this.cols; x++){
+
+                const worldX = x * game.gridSize;
+                const worldY = y * game.gridSize;
+
+                let blocked = false;
+
+                for(const wall of walls){
+
+                    if(
+                        worldX < wall.x + wall.w &&
+                        worldX + game.gridSize > wall.x &&
+                        worldY < wall.y + wall.h &&
+                        worldY + game.gridSize > wall.y
+                    ){
+                        blocked = true;
+                        break;
+                    }
+                }
+
+                this.map[y][x] = blocked ? 1 : 0;
+            }
+        }
+    },
+
+    isBlocked(x, y){
+
+        if(
+            x < 0 ||
+            y < 0 ||
+            x >= this.cols ||
+            y >= this.rows
+        ){
+            return true;
+        }
+
+        return this.map[y][x] === 1;
+    }
+};
 
 /* =========================================================
    COLLISION
 ========================================================= */
 
-function isCollidingWithWall(x, y, radius){
+MovementSystem.isCollidingWithWall =
+function(x, y, radius, walls){
 
     for(const wall of walls){
 
@@ -36,15 +100,22 @@ function isCollidingWithWall(x, y, radius){
     }
 
     return false;
-}
+};
 
-function moveWithCollision(entity, moveX, moveY){
+MovementSystem.moveWithCollision =
+function(entity, moveX, moveY, walls){
 
     const nextX = entity.x + moveX;
     const nextY = entity.y + moveY;
 
-    // XY
-    if(!isCollidingWithWall(nextX, nextY, entity.radius)){
+    if(
+        !MovementSystem.isCollidingWithWall(
+            nextX,
+            nextY,
+            entity.radius,
+            walls
+        )
+    ){
 
         entity.x = nextX;
         entity.y = nextY;
@@ -52,16 +123,28 @@ function moveWithCollision(entity, moveX, moveY){
         return true;
     }
 
-    // X
-    if(!isCollidingWithWall(nextX, entity.y, entity.radius)){
+    if(
+        !MovementSystem.isCollidingWithWall(
+            nextX,
+            entity.y,
+            entity.radius,
+            walls
+        )
+    ){
 
         entity.x = nextX;
 
         return true;
     }
 
-    // Y
-    if(!isCollidingWithWall(entity.x, nextY, entity.radius)){
+    if(
+        !MovementSystem.isCollidingWithWall(
+            entity.x,
+            nextY,
+            entity.radius,
+            walls
+        )
+    ){
 
         entity.y = nextY;
 
@@ -69,13 +152,14 @@ function moveWithCollision(entity, moveX, moveY){
     }
 
     return false;
-}
+};
 
 /* =========================================================
    SAFE POSITION
 ========================================================= */
 
-function getSafePosition(x, y, radius){
+MovementSystem.getSafePosition =
+function(x, y, radius, walls){
 
     let safeX = x;
     let safeY = y;
@@ -113,80 +197,18 @@ function getSafePosition(x, y, radius){
         x: safeX,
         y: safeY
     };
-}
-
-/* =========================================================
-   GRID
-========================================================= */
-
-const Grid = {
-
-    cols: 0,
-    rows: 0,
-
-    map: [],
-
-    init(){
-
-        this.cols =
-            Math.ceil(Game.worldWidth / Game.gridSize);
-
-        this.rows =
-            Math.ceil(Game.worldHeight / Game.gridSize);
-
-        this.map = [];
-
-        for(let y=0; y<this.rows; y++){
-
-            this.map[y] = [];
-
-            for(let x=0; x<this.cols; x++){
-
-                const worldX = x * Game.gridSize;
-                const worldY = y * Game.gridSize;
-
-                let blocked = false;
-
-                for(const wall of walls){
-
-                    if(
-                        worldX < wall.x + wall.w &&
-                        worldX + Game.gridSize > wall.x &&
-                        worldY < wall.y + wall.h &&
-                        worldY + Game.gridSize > wall.y
-                    ){
-                        blocked = true;
-                        break;
-                    }
-                }
-
-                this.map[y][x] = blocked ? 1 : 0;
-            }
-        }
-    },
-
-    isBlocked(x, y){
-
-        if(
-            x < 0 ||
-            y < 0 ||
-            x >= this.cols ||
-            y >= this.rows
-        ){
-            return true;
-        }
-
-        return this.map[y][x] === 1;
-    }
 };
 
 /* =========================================================
    PATH HELPERS
 ========================================================= */
 
-function findNearestWalkable(gx, gy){
+MovementSystem.findNearestWalkable =
+function(gx, gy){
 
-    if(!Grid.isBlocked(gx, gy)){
+    if(
+        !MovementSystem.Grid.isBlocked(gx, gy)
+    ){
 
         return {
             x: gx,
@@ -205,7 +227,9 @@ function findNearestWalkable(gx, gy){
                 const nx = gx + x;
                 const ny = gy + y;
 
-                if(!Grid.isBlocked(nx, ny)){
+                if(
+                    !MovementSystem.Grid.isBlocked(nx, ny)
+                ){
 
                     return {
                         x: nx,
@@ -217,13 +241,10 @@ function findNearestWalkable(gx, gy){
     }
 
     return null;
-}
+};
 
-/* =========================================================
-   PATH SMOOTH
-========================================================= */
-
-function hasLineOfSight(x1, y1, x2, y2){
+MovementSystem.hasLineOfSight =
+function(x1, y1, x2, y2, walls){
 
     const dx = x2 - x1;
     const dy = y2 - y1;
@@ -245,16 +266,24 @@ function hasLineOfSight(x1, y1, x2, y2){
         const x = x1 + dx * t;
         const y = y1 + dy * t;
 
-        if(isCollidingWithWall(x, y, 10)){
+        if(
+            MovementSystem.isCollidingWithWall(
+                x,
+                y,
+                10,
+                walls
+            )
+        ){
 
             return false;
         }
     }
 
     return true;
-}
+};
 
-function smoothPath(path){
+MovementSystem.smoothPath =
+function(path, walls){
 
     if(path.length <= 2){
 
@@ -277,11 +306,12 @@ function smoothPath(path){
             const b = path[i];
 
             if(
-                hasLineOfSight(
+                MovementSystem.hasLineOfSight(
                     a.x,
                     a.y,
                     b.x,
-                    b.y
+                    b.y,
+                    walls
                 )
             ){
                 next = i;
@@ -295,26 +325,210 @@ function smoothPath(path){
     }
 
     return result;
-}
+};
 
 /* =========================================================
-   PATH BUILD
+   PATHFIND
 ========================================================= */
 
-function buildPath(node){
+MovementSystem.findPath =
+function(startX, startY, goalX, goalY, game){
+
+    const gridSize = game.gridSize;
+
+    const rawStartGX =
+        Math.floor(startX / gridSize);
+
+    const rawStartGY =
+        Math.floor(startY / gridSize);
+
+    const rawGoalGX =
+        Math.floor(goalX / gridSize);
+
+    const rawGoalGY =
+        Math.floor(goalY / gridSize);
+
+    const startNode =
+        MovementSystem.findNearestWalkable(
+            rawStartGX,
+            rawStartGY
+        );
+
+    const goalNode =
+        MovementSystem.findNearestWalkable(
+            rawGoalGX,
+            rawGoalGY
+        );
+
+    if(!startNode || !goalNode){
+
+        return [];
+    }
+
+    const startGX = startNode.x;
+    const startGY = startNode.y;
+
+    const goalGX = goalNode.x;
+    const goalGY = goalNode.y;
+
+    const open = [];
+    const closed = {};
+
+    let closestNode = null;
+    let closestDist = Infinity;
+
+    open.push({
+        x:startGX,
+        y:startGY,
+        g:0,
+        h:0,
+        f:0,
+        parent:null
+    });
+
+    const dirs = [
+        [ 1, 0],
+        [-1, 0],
+        [ 0, 1],
+        [ 0,-1],
+        [ 1, 1],
+        [ 1,-1],
+        [-1, 1],
+        [-1,-1]
+    ];
+
+    while(open.length > 0){
+
+        open.sort((a,b)=>a.f-b.f);
+
+        const current = open.shift();
+
+        const key =
+            current.x + "," + current.y;
+
+        closed[key] = true;
+
+        const goalDist =
+            Math.hypot(
+                goalGX - current.x,
+                goalGY - current.y
+            );
+
+        if(goalDist < closestDist){
+
+            closestDist = goalDist;
+            closestNode = current;
+        }
+
+        if(
+            current.x === goalGX &&
+            current.y === goalGY
+        ){
+
+            return MovementSystem.smoothPath(
+                buildPath(current, game),
+                window.walls
+            );
+        }
+
+        for(const dir of dirs){
+
+            const nx = current.x + dir[0];
+            const ny = current.y + dir[1];
+
+            const nkey = nx + "," + ny;
+
+            if(closed[nkey]) continue;
+
+            if(
+                MovementSystem.Grid.isBlocked(nx, ny)
+            ) continue;
+
+            if(dir[0] !== 0 && dir[1] !== 0){
+
+                if(
+                    MovementSystem.Grid.isBlocked(
+                        current.x + dir[0],
+                        current.y
+                    ) ||
+                    MovementSystem.Grid.isBlocked(
+                        current.x,
+                        current.y + dir[1]
+                    )
+                ){
+                    continue;
+                }
+            }
+
+            const g =
+                current.g +
+                ((dir[0] !== 0 && dir[1] !== 0) ? 1.4 : 1);
+
+            const h =
+                Math.abs(goalGX - nx) +
+                Math.abs(goalGY - ny);
+
+            const f = g + h;
+
+            let exists = false;
+
+            for(const node of open){
+
+                if(node.x === nx && node.y === ny){
+
+                    exists = true;
+
+                    if(g < node.g){
+
+                        node.g = g;
+                        node.f = f;
+                        node.parent = current;
+                    }
+
+                    break;
+                }
+            }
+
+            if(!exists){
+
+                open.push({
+                    x:nx,
+                    y:ny,
+                    g,
+                    h,
+                    f,
+                    parent:current
+                });
+            }
+        }
+    }
+
+    if(closestNode){
+
+        return MovementSystem.smoothPath(
+            buildPath(closestNode, game),
+            window.walls
+        );
+    }
+
+    return [];
+};
+
+function buildPath(node, game){
 
     const path = [];
 
     while(node){
 
         path.push({
+
             x:
-                node.x * Game.gridSize +
-                Game.gridSize / 2,
+                node.x * game.gridSize +
+                game.gridSize / 2,
 
             y:
-                node.y * Game.gridSize +
-                Game.gridSize / 2
+                node.y * game.gridSize +
+                game.gridSize / 2
         });
 
         node = node.parent;
@@ -324,310 +538,5 @@ function buildPath(node){
 
     return path;
 }
-
-/* =========================================================
-   PATHFIND
-========================================================= */
-
-const Pathfinding = {
-
-    findPath(startX, startY, goalX, goalY){
-
-        const gridSize = Game.gridSize;
-
-        const rawStartGX = Math.floor(startX / gridSize);
-        const rawStartGY = Math.floor(startY / gridSize);
-
-        const rawGoalGX = Math.floor(goalX / gridSize);
-        const rawGoalGY = Math.floor(goalY / gridSize);
-
-        const startNode =
-            findNearestWalkable(
-                rawStartGX,
-                rawStartGY
-            );
-
-        const goalNode =
-            findNearestWalkable(
-                rawGoalGX,
-                rawGoalGY
-            );
-
-        if(!startNode || !goalNode){
-
-            return [];
-        }
-
-        const startGX = startNode.x;
-        const startGY = startNode.y;
-
-        const goalGX = goalNode.x;
-        const goalGY = goalNode.y;
-
-        const open = [];
-        const closed = {};
-
-        let closestNode = null;
-        let closestDist = Infinity;
-
-        open.push({
-            x:startGX,
-            y:startGY,
-            g:0,
-            h:0,
-            f:0,
-            parent:null
-        });
-
-        const dirs = [
-            [ 1, 0],
-            [-1, 0],
-            [ 0, 1],
-            [ 0,-1],
-            [ 1, 1],
-            [ 1,-1],
-            [-1, 1],
-            [-1,-1]
-        ];
-
-        let loop = 0;
-        const maxLoop = 3000;
-
-        while(open.length > 0 && loop < maxLoop){
-
-            loop++;
-
-            open.sort((a,b) => a.f - b.f);
-
-            const current = open.shift();
-
-            const key = current.x + "," + current.y;
-
-            closed[key] = true;
-
-            const goalDist =
-                Math.hypot(
-                    goalGX - current.x,
-                    goalGY - current.y
-                );
-
-            if(goalDist < closestDist){
-
-                closestDist = goalDist;
-                closestNode = current;
-            }
-
-            if(
-                current.x === goalGX &&
-                current.y === goalGY
-            ){
-                return smoothPath(buildPath(current));
-            }
-
-            for(const dir of dirs){
-
-                const nx = current.x + dir[0];
-                const ny = current.y + dir[1];
-
-                const nkey = nx + "," + ny;
-
-                if(closed[nkey]) continue;
-
-                if(Grid.isBlocked(nx, ny)) continue;
-
-                if(dir[0] !== 0 && dir[1] !== 0){
-
-                    if(
-                        Grid.isBlocked(current.x + dir[0], current.y) ||
-                        Grid.isBlocked(current.x, current.y + dir[1])
-                    ){
-                        continue;
-                    }
-                }
-
-                const g =
-                    current.g +
-                    ((dir[0] !== 0 && dir[1] !== 0) ? 1.4 : 1);
-
-                const h =
-                    Math.abs(goalGX - nx) +
-                    Math.abs(goalGY - ny);
-
-                const f = g + h;
-
-                let exists = false;
-
-                for(const node of open){
-
-                    if(node.x === nx && node.y === ny){
-
-                        exists = true;
-
-                        if(g < node.g){
-
-                            node.g = g;
-                            node.f = f;
-                            node.parent = current;
-                        }
-
-                        break;
-                    }
-                }
-
-                if(!exists){
-
-                    open.push({
-                        x:nx,
-                        y:ny,
-                        g,
-                        h,
-                        f,
-                        parent:current
-                    });
-                }
-            }
-        }
-
-        if(closestNode){
-
-            return smoothPath(buildPath(closestNode));
-        }
-
-        return [];
-    }
-};
-
-/* =========================================================
-   PLAYER MOVE
-========================================================= */
-
-function moveTo(player, x, y){
-
-    player.dragMoving = false;
-
-    const safePos =
-        getSafePosition(
-            player.x,
-            player.y,
-            player.radius
-        );
-
-    player.path =
-        Pathfinding.findPath(
-            safePos.x,
-            safePos.y,
-            x,
-            y
-        );
-
-    player.pathIndex = 0;
-
-    player.moving = player.path.length > 0;
-}
-
-function setDragMove(player, dx, dy){
-
-    const dist = Math.hypot(dx, dy);
-
-    if(dist <= 0) return;
-
-    player.dragDirX = dx / dist;
-    player.dragDirY = dy / dist;
-
-    player.dragMoving = true;
-
-    player.moving = false;
-}
-
-function updateMovement(player, dt){
-
-    if(player.dragMoving){
-
-        const moveX =
-            player.dragDirX *
-            player.moveSpeed *
-            dt;
-
-        const moveY =
-            player.dragDirY *
-            player.moveSpeed *
-            dt;
-
-        moveWithCollision(
-            player,
-            moveX,
-            moveY
-        );
-
-        return;
-    }
-
-    if(!player.moving) return;
-
-    const target =
-        player.path[player.pathIndex];
-
-    if(!target){
-
-        player.moving = false;
-        return;
-    }
-
-    const dx = target.x - player.x;
-    const dy = target.y - player.y;
-
-    const dist = Math.hypot(dx, dy);
-
-    if(dist < 6){
-
-        player.pathIndex++;
-
-        if(player.pathIndex >= player.path.length){
-
-            player.moving = false;
-        }
-
-        return;
-    }
-
-    const nx = dx / dist;
-    const ny = dy / dist;
-
-    const moveX =
-        nx *
-        player.moveSpeed *
-        dt;
-
-    const moveY =
-        ny *
-        player.moveSpeed *
-        dt;
-
-    moveWithCollision(
-        player,
-        moveX,
-        moveY
-    );
-}
-
-/* =========================================================
-   EXPORT
-========================================================= */
-
-return {
-
-    Grid,
-
-    Pathfinding,
-
-    moveTo,
-    setDragMove,
-    updateMovement,
-
-    isCollidingWithWall,
-    moveWithCollision,
-
-    getSafePosition
-};
 
 })();
