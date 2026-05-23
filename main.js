@@ -1,5 +1,6 @@
 // =========================================================
 // main.js
+// プレイヤー中央固定カメラ版
 // =========================================================
 
 window.startGame = function(){
@@ -79,8 +80,8 @@ window.walls = [
 
 const player = {
 
-    x: 200,
-    y: 200,
+    x: 1200,
+    y: 1200,
 
     radius: 18,
 
@@ -179,11 +180,14 @@ canvas.addEventListener(
             return;
         }
 
+        // プレイヤー中心基準
         const worldX =
-            e.clientX + camera.x;
+            player.x +
+            (e.clientX - canvas.width / 2);
 
         const worldY =
-            e.clientY + camera.y;
+            player.y +
+            (e.clientY - canvas.height / 2);
 
         MovementSystem.moveTo(
             player,
@@ -209,6 +213,10 @@ function update(dt){
     updateCamera();
 }
 
+/* =========================================================
+   CAMERA UPDATE
+========================================================= */
+
 function updateCamera(){
 
     camera.x =
@@ -216,24 +224,6 @@ function updateCamera(){
 
     camera.y =
         player.y - canvas.height / 2;
-
-    camera.x =
-        Math.max(
-            0,
-            Math.min(
-                camera.x,
-                Game.worldWidth - canvas.width
-            )
-        );
-
-    camera.y =
-        Math.max(
-            0,
-            Math.min(
-                camera.y,
-                Game.worldHeight - canvas.height
-            )
-        );
 }
 
 /* =========================================================
@@ -261,16 +251,79 @@ function render(){
 
     ctx.save();
 
+    // ワールドを逆方向へ移動
     ctx.translate(
         -camera.x,
         -camera.y
     );
 
+    renderGrid();
     renderWorld();
     renderPlayer();
 
     ctx.restore();
 }
+
+/* =========================================================
+   GRID
+========================================================= */
+
+function renderGrid(){
+
+    ctx.strokeStyle =
+        "rgba(255,255,255,0.05)";
+
+    ctx.lineWidth = 1;
+
+    const size =
+        Game.gridSize;
+
+    for(
+        let x = 0;
+        x <= Game.worldWidth;
+        x += size
+    ){
+
+        ctx.beginPath();
+
+        ctx.moveTo(
+            x,
+            0
+        );
+
+        ctx.lineTo(
+            x,
+            Game.worldHeight
+        );
+
+        ctx.stroke();
+    }
+
+    for(
+        let y = 0;
+        y <= Game.worldHeight;
+        y += size
+    ){
+
+        ctx.beginPath();
+
+        ctx.moveTo(
+            0,
+            y
+        );
+
+        ctx.lineTo(
+            Game.worldWidth,
+            y
+        );
+
+        ctx.stroke();
+    }
+}
+
+/* =========================================================
+   WORLD
+========================================================= */
 
 function renderWorld(){
 
@@ -287,6 +340,10 @@ function renderWorld(){
     }
 }
 
+/* =========================================================
+   PLAYER
+========================================================= */
+
 function renderPlayer(){
 
     ctx.beginPath();
@@ -297,6 +354,21 @@ function renderPlayer(){
         player.x,
         player.y,
         player.radius,
+        0,
+        Math.PI * 2
+    );
+
+    ctx.fill();
+
+    // 中心点
+    ctx.beginPath();
+
+    ctx.fillStyle = "#ffffff";
+
+    ctx.arc(
+        player.x,
+        player.y,
+        3,
         0,
         Math.PI * 2
     );
