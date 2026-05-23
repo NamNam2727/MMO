@@ -2,7 +2,7 @@
 // main.js
 // =========================================================
 
-window.startGame = (() => {
+window.startGame = function(){
 
 "use strict";
 
@@ -236,7 +236,6 @@ function render(){
         canvas.height
     );
 
-    // 背景
     ctx.fillStyle = "#2f5d3a";
 
     ctx.fillRect(
@@ -318,4 +317,4 @@ requestAnimationFrame(
     gameLoop
 );
 
-});
+};
