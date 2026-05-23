@@ -1,12 +1,26 @@
+// =========================================================
+// loader.js
+// =========================================================
+
 (async () => {
 
 "use strict";
 
+/* =========================================================
+   SCRIPT LIST
+========================================================= */
+
 const scripts = [
 
-    "https://namnam2727.github.io/MMO/movement.js"
+    "https://namnam2727.github.io/MMO/movement.js",
+
+    "https://namnam2727.github.io/MMO/main.js"
 
 ];
+
+/* =========================================================
+   LOAD SCRIPT
+========================================================= */
 
 function loadScript(src){
 
@@ -17,6 +31,7 @@ function loadScript(src){
 
         script.src = src;
 
+        // 読み込み順維持
         script.async = false;
 
         script.onload = () => {
@@ -43,29 +58,38 @@ function loadScript(src){
     });
 }
 
-for(const src of scripts){
+/* =========================================================
+   LOAD ALL
+========================================================= */
 
-    await loadScript(src);
+async function loadAll(){
+
+    for(const src of scripts){
+
+        await loadScript(src);
+    }
+
+    console.log(
+        "[Loader] All scripts loaded"
+    );
+
+    // 少し待ってから開始
+    setTimeout(() => {
+
+        if(typeof window.startGame === "function"){
+
+            window.startGame();
+        }
+        else{
+
+            console.warn(
+                "[Loader] startGame not found"
+            );
+        }
+
+    }, 0);
 }
 
-console.log(
-    "[Loader] All scripts loaded"
-);
-
-// 少し待つ
-setTimeout(() => {
-
-    if(typeof window.startGame === "function"){
-
-        window.startGame();
-    }
-    else{
-
-        console.warn(
-            "[Loader] startGame not found"
-        );
-    }
-
-}, 0);
+loadAll();
 
 })();
