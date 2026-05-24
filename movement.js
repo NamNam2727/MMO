@@ -1,4 +1,4 @@
-　(function(){
+(function(){
 
 "use strict";
 
@@ -25,31 +25,25 @@ MovementSystem.Grid = {
 
         this.map = [];
 
-        // 【修正】壁がグリッドに少しだけはみ出している程度ではブロックしないためのマージン
-        // グリッドサイズの35%未満の重なりは「歩ける場所」として許容します
-        const margin = game.gridSize * 0.35;
-
         for(let y=0; y<this.rows; y++){
 
             this.map[y] = [];
 
             for(let x=0; x<this.cols; x++){
 
-                const cellX = x * game.gridSize;
-                const cellY = y * game.gridSize;
-                const cellRight = cellX + game.gridSize;
-                const cellBottom = cellY + game.gridSize;
+                const worldX = x * game.gridSize;
+                const worldY = y * game.gridSize;
 
                 let blocked = false;
 
                 for(const wall of walls){
 
-                    // マージンを考慮した判定
+                    // 動作していたHTMLと同じ正確なAABB（重なり）判定
                     if(
-                        cellX < wall.x + wall.w - margin &&
-                        cellRight > wall.x + margin &&
-                        cellY < wall.y + wall.h - margin &&
-                        cellBottom > wall.y + margin
+                        worldX < wall.x + wall.w &&
+                        worldX + game.gridSize > wall.x &&
+                        worldY < wall.y + wall.h &&
+                        worldY + game.gridSize > wall.y
                     ){
                         blocked = true;
                         break;
@@ -111,56 +105,24 @@ function(x, y, radius, walls){
 MovementSystem.moveWithCollision =
 function(entity, moveX, moveY, walls){
 
-    // 【修正】移動前に「すでにめり込んでいないか」をチェックし、入っていれば押し出す（スタック防止）
-    const safePos = MovementSystem.getSafePosition(
-        entity.x,
-        entity.y,
-        entity.radius,
-        walls
-    );
-    entity.x = safePos.x;
-    entity.y = safePos.y;
-
-    // 押し出し後の安全な座標を起点に移動先を計算
     const nextX = entity.x + moveX;
     const nextY = entity.y + moveY;
 
-    // XY移動
-    if(
-        !MovementSystem.isCollidingWithWall(
-            nextX,
-            nextY,
-            entity.radius,
-            walls
-        )
-    ){
+    // 両方移動
+    if(!MovementSystem.isCollidingWithWall(nextX, nextY, entity.radius, walls)){
         entity.x = nextX;
         entity.y = nextY;
         return true;
     }
 
     // Xのみ
-    if(
-        !MovementSystem.isCollidingWithWall(
-            nextX,
-            entity.y,
-            entity.radius,
-            walls
-        )
-    ){
+    if(!MovementSystem.isCollidingWithWall(nextX, entity.y, entity.radius, walls)){
         entity.x = nextX;
         return true;
     }
 
     // Yのみ
-    if(
-        !MovementSystem.isCollidingWithWall(
-            entity.x,
-            nextY,
-            entity.radius,
-            walls
-        )
-    ){
+    if(!MovementSystem.isCollidingWithWall(entity.x, nextY, entity.radius, walls)){
         entity.y = nextY;
         return true;
     }
@@ -169,7 +131,7 @@ function(entity, moveX, moveY, walls){
 };
 
 /* =========================================================
-   SAFE POSITION (めり込み解消ロジックの強化)
+   SAFE POSITION
 ========================================================= */
 
 MovementSystem.getSafePosition =
@@ -180,25 +142,6 @@ function(x, y, radius, walls){
 
     for(const wall of walls){
 
-        // 【修正】中心が壁の「完全に内側」に入ってしまった場合の強制押し出し
-        if(
-            safeX > wall.x && safeX < wall.x + wall.w &&
-            safeY > wall.y && safeY < wall.y + wall.h
-        ){
-            const distLeft = safeX - wall.x;
-            const distRight = (wall.x + wall.w) - safeX;
-            const distTop = safeY - wall.y;
-            const distBottom = (wall.y + wall.h) - safeY;
-
-            const minDist = Math.min(distLeft, distRight, distTop, distBottom);
-
-            if(minDist === distLeft) safeX = wall.x - radius;
-            else if(minDist === distRight) safeX = wall.x + wall.w + radius;
-            else if(minDist === distTop) safeY = wall.y - radius;
-            else if(minDist === distBottom) safeY = wall.y + wall.h + radius;
-        }
-
-        // 通常の円形押し出し処理（かすっている時の処理）
         const nearestX = Math.max(
             wall.x,
             Math.min(safeX, wall.x + wall.w)
@@ -216,7 +159,8 @@ function(x, y, radius, walls){
 
         if(dist < radius){
 
-            const push = radius - dist + 0.1; // +0.1の余裕を持たせて確実に外へ出す
+            // 動作していたHTMLと同じく押し出し幅は +1
+            const push = radius - dist + 1;
 
             const nx = dx / (dist || 1);
             const ny = dy / (dist || 1);
@@ -239,16 +183,15 @@ function(x, y, radius, walls){
 MovementSystem.findNearestWalkable =
 function(gx, gy){
 
-    if(
-        !MovementSystem.Grid.isBlocked(gx, gy)
-    ){
-        return { x: gx, y: gy };
+    if(!MovementSystem.Grid.isBlocked(gx, gy)){
+        return {
+            x: gx,
+            y: gy
+        };
     }
 
-    const maxRadius = 12;
-
-    let best = null;
-    let bestDist = Infinity;
+    // 動作していたHTMLと同じ maxRadius: 6 と即時リターン処理
+    const maxRadius = 6;
 
     for(let r = 1; r <= maxRadius; r++){
         for(let y = -r; y <= r; y++){
@@ -257,43 +200,49 @@ function(gx, gy){
                 const nx = gx + x;
                 const ny = gy + y;
 
-                if(MovementSystem.Grid.isBlocked(nx, ny)){
-                    continue;
-                }
-
-                const dist = Math.hypot(x, y);
-
-                if(dist < bestDist){
-                    bestDist = dist;
-                    best = { x: nx, y: ny };
+                if(!MovementSystem.Grid.isBlocked(nx, ny)){
+                    return {
+                        x: nx,
+                        y: ny
+                    };
                 }
             }
         }
     }
 
-    return best;
+    return null;
 };
 
+/* =========================================================
+   PATH SMOOTHING
+========================================================= */
+
 MovementSystem.hasLineOfSight =
-function(x1, y1, x2, y2, walls, game){
+function(x1, y1, x2, y2, walls){
 
     const dx = x2 - x1;
     const dy = y2 - y1;
+
     const distance = Math.hypot(dx, dy);
-    const step = 8;
+
+    // 動作していたHTMLと同じ step: 16
+    const step = 16;
     const steps = Math.ceil(distance / step);
 
-    // 【修正】レイキャストの太さを45%にし、エンティティが確実に通れる道だけをショートカットさせる
-    const rayRadius = game ? (game.gridSize * 0.45) : 12;
-
     for(let i = 0; i <= steps; i++){
-        if(i <= 1) continue;
+
+        // 開始地点付近は無視
+        if(i <= 1){
+            continue;
+        }
 
         const t = i / steps;
+
         const x = x1 + dx * t;
         const y = y1 + dy * t;
 
-        if(MovementSystem.isCollidingWithWall(x, y, rayRadius, walls)){
+        // 動作していたHTMLと同じ 判定半径: 10
+        if(MovementSystem.isCollidingWithWall(x, y, 10, walls)){
             return false;
         }
     }
@@ -302,7 +251,7 @@ function(x1, y1, x2, y2, walls, game){
 };
 
 MovementSystem.smoothPath =
-function(path, walls, game){
+function(path, walls){
 
     if(path.length <= 2){
         return path;
@@ -310,16 +259,20 @@ function(path, walls, game){
 
     const result = [];
     let current = 0;
+
     result.push(path[0]);
 
     while(current < path.length - 1){
-        let next = current + 1;
+
+        // 動作していたHTMLと同じロジック
+        let next = path.length - 1;
 
         for(let i = path.length - 1; i > current; i--){
+
             const a = path[current];
             const b = path[i];
 
-            if(MovementSystem.hasLineOfSight(a.x, a.y, b.x, b.y, walls, game)){
+            if(MovementSystem.hasLineOfSight(a.x, a.y, b.x, b.y, walls)){
                 next = i;
                 break;
             }
@@ -337,12 +290,13 @@ function(path, walls, game){
 ========================================================= */
 
 MovementSystem.findPath =
-function(startX, startY, goalX, goalY, game){
+function(startX, startY, goalX, goalY, game, walls){
 
     const gridSize = game.gridSize;
 
     const rawStartGX = Math.floor(startX / gridSize);
     const rawStartGY = Math.floor(startY / gridSize);
+
     const rawGoalGX = Math.floor(goalX / gridSize);
     const rawGoalGY = Math.floor(goalY / gridSize);
 
@@ -355,11 +309,13 @@ function(startX, startY, goalX, goalY, game){
 
     const startGX = startNode.x;
     const startGY = startNode.y;
+
     const goalGX = goalNode.x;
     const goalGY = goalNode.y;
 
     const open = [];
     const closed = {};
+
     let closestNode = null;
     let closestDist = Infinity;
 
@@ -373,42 +329,58 @@ function(startX, startY, goalX, goalY, game){
     });
 
     const dirs = [
-        [ 1, 0], [-1, 0], [ 0, 1], [ 0,-1],
-        [ 1, 1], [ 1,-1], [-1, 1], [-1,-1]
+        [ 1, 0],
+        [-1, 0],
+        [ 0, 1],
+        [ 0,-1],
+        [ 1, 1],
+        [ 1,-1],
+        [-1, 1],
+        [-1,-1]
     ];
 
     let loop = 0;
-    const maxLoop = 4000;
+    // 動作していたHTMLと同じく maxLoop: 3000
+    const maxLoop = 3000;
 
     while(open.length > 0 && loop < maxLoop){
+
         loop++;
-        open.sort((a,b)=>a.f-b.f);
+
+        open.sort((a,b) => a.f - b.f);
+
         const current = open.shift();
+
         const key = current.x + "," + current.y;
+
         closed[key] = true;
 
         const goalDist = Math.hypot(goalGX - current.x, goalGY - current.y);
+
         if(goalDist < closestDist){
             closestDist = goalDist;
             closestNode = current;
         }
 
-        if(current.x === goalGX && current.y === goalGY){
-            return MovementSystem.smoothPath(
-                buildPath(current, game),
-                window.walls,
-                game
-            );
+        if(
+            current.x === goalGX &&
+            current.y === goalGY
+        ){
+            return MovementSystem.smoothPath(buildPath(current, game), walls);
         }
 
         for(const dir of dirs){
+
             const nx = current.x + dir[0];
             const ny = current.y + dir[1];
+
             const nkey = nx + "," + ny;
 
             if(closed[nkey]) continue;
+
             if(MovementSystem.Grid.isBlocked(nx, ny)) continue;
 
+            // 斜めすり抜け禁止
             if(dir[0] !== 0 && dir[1] !== 0){
                 if(
                     MovementSystem.Grid.isBlocked(current.x + dir[0], current.y) ||
@@ -419,10 +391,14 @@ function(startX, startY, goalX, goalY, game){
             }
 
             const g = current.g + ((dir[0] !== 0 && dir[1] !== 0) ? 1.4 : 1);
-            const h = Math.hypot(goalGX - nx, goalGY - ny);
+
+            // 動作していたHTMLと同じ「マンハッタン距離」による計算式
+            const h = Math.abs(goalGX - nx) + Math.abs(goalGY - ny);
+
             const f = g + h;
 
             let exists = false;
+
             for(const node of open){
                 if(node.x === nx && node.y === ny){
                     exists = true;
@@ -449,11 +425,7 @@ function(startX, startY, goalX, goalY, game){
     }
 
     if(closestNode){
-        return MovementSystem.smoothPath(
-            buildPath(closestNode, game),
-            window.walls,
-            game
-        );
+        return MovementSystem.smoothPath(buildPath(closestNode, game), walls);
     }
 
     return [];
@@ -464,7 +436,9 @@ function(startX, startY, goalX, goalY, game){
 ========================================================= */
 
 function buildPath(node, game){
+
     const path = [];
+
     while(node){
         path.push({
             x: node.x * game.gridSize + game.gridSize / 2,
@@ -472,7 +446,9 @@ function buildPath(node, game){
         });
         node = node.parent;
     }
+
     path.reverse();
+
     return path;
 }
 
