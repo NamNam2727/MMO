@@ -125,6 +125,85 @@ window.initUI = function() {
     };
 
     // ------------------------------------
+    // ドロップ（置く）関連のUI動的生成・処理
+    // ------------------------------------
+    function executeDrop(item, tabData, selectedIndex, dropCount) {
+        if (item.isEquipped) { 
+            item.isEquipped = false; window.player.equipped[item.equipSlot] = null; window.updatePlayerStats(); 
+        }
+
+        item.count -= dropCount;
+        if (item.count <= 0) { tabData.items.splice(selectedIndex, 1); window.selectedItemIndex = -1; }
+
+        // まとめた個数(dropCount)を持った1つのオブジェクトとしてフィールドに配置
+        window.droppedItems.push({
+            uid: Date.now() + Math.random(), id: item.id, 
+            type: item.type, equipSlot: item.equipSlot, name: item.name, rarity: item.rarity, 
+            color: item.color, desc: item.desc, stats: item.stats, restore: item.restore, maxStack: item.maxStack,
+            count: dropCount, x: window.player.x, y: window.player.y, radius: 8, ownerId: window.player.id, lifeTime: 0
+        });
+
+        itemDetail.style.display = 'none'; window.renderInventory();
+    }
+
+    function showDropDialog(item, tabData, selectedIndex) {
+        // 背景を暗くするオーバーレイを動的生成
+        const overlay = document.createElement('div');
+        overlay.style.position = 'absolute'; overlay.style.top = '0'; overlay.style.left = '0';
+        overlay.style.width = '100%'; overlay.style.height = '100%';
+        overlay.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+        overlay.style.zIndex = '30'; overlay.style.display = 'flex';
+        overlay.style.justifyContent = 'center'; overlay.style.alignItems = 'center';
+        overlay.style.pointerEvents = 'auto'; // タップをここで止める
+
+        // ポップアップウィンドウ本体
+        const dialog = document.createElement('div');
+        dialog.style.width = '160px'; dialog.style.backgroundColor = 'rgba(20,20,20,0.95)';
+        dialog.style.border = '1px solid #777'; dialog.style.borderRadius = '8px';
+        dialog.style.padding = '15px'; dialog.style.display = 'flex'; dialog.style.flexDirection = 'column';
+        dialog.style.position = 'relative';
+
+        // ❌ボタン
+        const closeBtn = document.createElement('span');
+        closeBtn.innerText = '❌'; closeBtn.style.position = 'absolute'; closeBtn.style.right = '10px'; closeBtn.style.top = '10px';
+        closeBtn.style.cursor = 'pointer'; closeBtn.style.color = 'white'; closeBtn.style.fontSize = '12px';
+        closeBtn.addEventListener('pointerdown', (e) => { e.stopPropagation(); overlay.remove(); });
+
+        const title = document.createElement('div');
+        title.innerText = '置く個数を指定'; title.style.color = 'white'; title.style.marginBottom = '15px'; title.style.fontSize = '14px'; title.style.fontWeight = 'bold';
+
+        // スマホ標準のドラムロールを呼び出す <select> タグ
+        const select = document.createElement('select');
+        select.style.marginBottom = '15px'; select.style.padding = '8px'; select.style.fontSize = '16px'; select.style.borderRadius = '4px';
+        for (let i = 1; i <= item.count; i++) {
+            const option = document.createElement('option');
+            option.value = i; option.innerText = i + ' 個';
+            select.appendChild(option);
+        }
+
+        // 決定ボタン
+        const okBtn = document.createElement('button');
+        okBtn.innerText = '決定'; okBtn.style.backgroundColor = '#663'; okBtn.style.color = 'white';
+        okBtn.style.border = 'none'; okBtn.style.padding = '8px'; okBtn.style.borderRadius = '4px'; okBtn.style.fontWeight = 'bold';
+        okBtn.addEventListener('pointerdown', (e) => {
+            e.stopPropagation();
+            const dropCount = parseInt(select.value, 10);
+            executeDrop(item, tabData, selectedIndex, dropCount);
+            overlay.remove();
+        });
+
+        dialog.appendChild(closeBtn); dialog.appendChild(title); dialog.appendChild(select); dialog.appendChild(okBtn);
+        overlay.appendChild(dialog);
+
+        // 背景タップで閉じる
+        overlay.addEventListener('pointerdown', (e) => {
+            if (e.target === overlay) { e.stopPropagation(); overlay.remove(); }
+        });
+
+        document.getElementById('ui-layer').appendChild(overlay);
+    }
+
+    // ------------------------------------
     // イベントリスナーの登録
     // ------------------------------------
     document.getElementById('bagBtn').addEventListener('pointerdown', (e) => { e.stopPropagation(); window.toggleInventory(); });
@@ -206,19 +285,13 @@ window.initUI = function() {
         const item = tabData.items[window.selectedItemIndex];
         if (!item) return;
 
-        if (item.isEquipped) { item.isEquipped = false; window.player.equipped[item.equipSlot] = null; window.updatePlayerStats(); }
-
-        item.count--;
-        if (item.count <= 0) { tabData.items.splice(window.selectedItemIndex, 1); window.selectedItemIndex = -1; }
-
-        window.droppedItems.push({
-            uid: Date.now() + Math.random(), id: item.id, 
-            type: item.type, equipSlot: item.equipSlot, name: item.name, rarity: item.rarity, 
-            color: item.color, desc: item.desc, stats: item.stats, restore: item.restore, maxStack: item.maxStack,
-            count: 1, x: window.player.x, y: window.player.y, radius: 8, ownerId: window.player.id, lifeTime: 0
-        });
-
-        itemDetail.style.display = 'none'; window.renderInventory();
+        if (item.count > 1) {
+            // ★変更: 2個以上の場合は個数指定ポップアップを開く
+            showDropDialog(item, tabData, window.selectedItemIndex);
+        } else {
+            // ★変更: 1個の場合は即座に1個だけ捨てる
+            executeDrop(item, tabData, window.selectedItemIndex, 1);
+        }
     });
 
     document.getElementById('attackBtn').addEventListener('pointerdown', (e) => {
