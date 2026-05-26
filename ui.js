@@ -135,7 +135,6 @@ window.initUI = function() {
         item.count -= dropCount;
         if (item.count <= 0) { tabData.items.splice(selectedIndex, 1); window.selectedItemIndex = -1; }
 
-        // まとめた個数(dropCount)を持った1つのオブジェクトとしてフィールドに配置
         window.droppedItems.push({
             uid: Date.now() + Math.random(), id: item.id, 
             type: item.type, equipSlot: item.equipSlot, name: item.name, rarity: item.rarity, 
@@ -147,7 +146,7 @@ window.initUI = function() {
     }
 
     function showDropDialog(item, tabData, selectedIndex) {
-        // 背景を暗くするオーバーレイを動的生成
+        // 背景を暗くするオーバーレイ
         const overlay = document.createElement('div');
         overlay.style.position = 'absolute'; overlay.style.top = '0'; overlay.style.left = '0';
         overlay.style.width = '100%'; overlay.style.height = '100%';
@@ -158,7 +157,7 @@ window.initUI = function() {
 
         // ポップアップウィンドウ本体
         const dialog = document.createElement('div');
-        dialog.style.width = '160px'; dialog.style.backgroundColor = 'rgba(20,20,20,0.95)';
+        dialog.style.width = '180px'; dialog.style.backgroundColor = 'rgba(20,20,20,0.95)';
         dialog.style.border = '1px solid #777'; dialog.style.borderRadius = '8px';
         dialog.style.padding = '15px'; dialog.style.display = 'flex'; dialog.style.flexDirection = 'column';
         dialog.style.position = 'relative';
@@ -170,16 +169,61 @@ window.initUI = function() {
         closeBtn.addEventListener('pointerdown', (e) => { e.stopPropagation(); overlay.remove(); });
 
         const title = document.createElement('div');
-        title.innerText = '置く個数を指定'; title.style.color = 'white'; title.style.marginBottom = '15px'; title.style.fontSize = '14px'; title.style.fontWeight = 'bold';
+        title.innerText = '置く個数を指定'; title.style.color = 'white'; title.style.marginBottom = '15px'; 
+        title.style.fontSize = '14px'; title.style.fontWeight = 'bold'; title.style.textAlign = 'center';
 
-        // スマホ標準のドラムロールを呼び出す <select> タグ
-        const select = document.createElement('select');
-        select.style.marginBottom = '15px'; select.style.padding = '8px'; select.style.fontSize = '16px'; select.style.borderRadius = '4px';
-        for (let i = 1; i <= item.count; i++) {
-            const option = document.createElement('option');
-            option.value = i; option.innerText = i + ' 個';
-            select.appendChild(option);
-        }
+        // ★変更: スライダーと微調整ボタンのコンテナ
+        const countContainer = document.createElement('div');
+        countContainer.style.display = 'flex'; countContainer.style.justifyContent = 'space-between'; countContainer.style.alignItems = 'center';
+        countContainer.style.marginBottom = '10px';
+
+        let currentCount = 1;
+
+        // 数値表示
+        const countDisplay = document.createElement('div');
+        countDisplay.innerText = currentCount + ' 個'; 
+        countDisplay.style.color = '#00ffff'; countDisplay.style.fontSize = '16px'; countDisplay.style.fontWeight = 'bold';
+
+        // 微調整ボタン共通スタイル
+        const btnStyle = "background-color: #444; color: white; border: 1px solid #666; border-radius: 4px; width: 30px; height: 30px; font-size: 18px; font-weight: bold; cursor: pointer; display: flex; justify-content: center; align-items: center; user-select: none;";
+
+        // ［－］ボタン
+        const minusBtn = document.createElement('div');
+        minusBtn.innerText = '－'; minusBtn.style.cssText = btnStyle;
+        
+        // ［＋］ボタン
+        const plusBtn = document.createElement('div');
+        plusBtn.innerText = '＋'; plusBtn.style.cssText = btnStyle;
+
+        // スライダー（シークバー）
+        const slider = document.createElement('input');
+        slider.type = 'range'; slider.min = 1; slider.max = item.count; slider.value = 1;
+        slider.style.width = '100%'; slider.style.marginBottom = '15px';
+
+        // 数値表示の更新関数
+        const updateDisplay = () => {
+            countDisplay.innerText = currentCount + ' 個';
+            slider.value = currentCount;
+        };
+
+        // イベントの設定（stopPropagationで誤作動を防ぐ）
+        minusBtn.addEventListener('pointerdown', (e) => {
+            e.stopPropagation();
+            if (currentCount > 1) { currentCount--; updateDisplay(); }
+        });
+        plusBtn.addEventListener('pointerdown', (e) => {
+            e.stopPropagation();
+            if (currentCount < item.count) { currentCount++; updateDisplay(); }
+        });
+        slider.addEventListener('pointerdown', (e) => { e.stopPropagation(); });
+        slider.addEventListener('input', (e) => {
+            currentCount = parseInt(e.target.value, 10);
+            countDisplay.innerText = currentCount + ' 個';
+        });
+
+        countContainer.appendChild(minusBtn);
+        countContainer.appendChild(countDisplay);
+        countContainer.appendChild(plusBtn);
 
         // 決定ボタン
         const okBtn = document.createElement('button');
@@ -187,12 +231,15 @@ window.initUI = function() {
         okBtn.style.border = 'none'; okBtn.style.padding = '8px'; okBtn.style.borderRadius = '4px'; okBtn.style.fontWeight = 'bold';
         okBtn.addEventListener('pointerdown', (e) => {
             e.stopPropagation();
-            const dropCount = parseInt(select.value, 10);
-            executeDrop(item, tabData, selectedIndex, dropCount);
+            executeDrop(item, tabData, selectedIndex, currentCount);
             overlay.remove();
         });
 
-        dialog.appendChild(closeBtn); dialog.appendChild(title); dialog.appendChild(select); dialog.appendChild(okBtn);
+        dialog.appendChild(closeBtn); 
+        dialog.appendChild(title); 
+        dialog.appendChild(countContainer); 
+        dialog.appendChild(slider); 
+        dialog.appendChild(okBtn);
         overlay.appendChild(dialog);
 
         // 背景タップで閉じる
@@ -286,10 +333,8 @@ window.initUI = function() {
         if (!item) return;
 
         if (item.count > 1) {
-            // ★変更: 2個以上の場合は個数指定ポップアップを開く
             showDropDialog(item, tabData, window.selectedItemIndex);
         } else {
-            // ★変更: 1個の場合は即座に1個だけ捨てる
             executeDrop(item, tabData, window.selectedItemIndex, 1);
         }
     });
