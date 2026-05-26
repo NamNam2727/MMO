@@ -8,17 +8,52 @@ window.player = {
     id: 'p1', 
     x: window.world.width / 2, y: window.world.height / 2, 
     targetX: window.world.width / 2, targetY: window.world.height / 2,
-    speed: 240, radius: 15, color: '#00ffff',
-    hp: 100, maxHp: 100,
+    speed: 240, radius: 15, color: '#00ffff', hp: 100, maxHp: 100,
+    targetEnemy: null, isAutoAttacking: false, targetItem: null, 
     
-    targetEnemy: null, isAutoAttacking: false,
-    targetItem: null, 
+    // ★追加: 攻撃力等の基本ステータス
+    baseAttackDamage: 10, attackDamage: 10, attackRange: 50, attackRate: 0.5, attackCooldown: 0, pickupRange: 20,
     
-    attackRange: 50, attackDamage: 10, attackRate: 0.5, attackCooldown: 0,
-    pickupRange: 20   
+    // ★追加: 所持金
+    gold: 0, 
+
+    // ★追加: 装備とインベントリ
+    equipped: { weapon: null, armor: null, accessory: null },
+    inventory: {
+        equip: { capacity: 20, items: [] }, consume: { capacity: 20, items: [] },
+        skill: { capacity: 20, items: [] }, etc: { capacity: 20, items: [] }, important: { capacity: 20, items: [] }
+    }
 };
 
 window.playerPath = [];
+
+// ★追加: 装備変更時などのステータス再計算
+window.updatePlayerStats = function() {
+    window.player.attackDamage = window.player.baseAttackDamage;
+    if (window.player.equipped.weapon && window.player.equipped.weapon.stats.atk) {
+        window.player.attackDamage += window.player.equipped.weapon.stats.atk;
+    }
+};
+
+// ★追加: インベントリへのアイテム追加処理
+window.addItemToInventory = function(itemData) {
+    const tab = window.player.inventory[itemData.type];
+    if (!tab) return false;
+    const addCount = itemData.count || 1;
+    if (itemData.maxStack > 1) {
+        let existingItem = tab.items.find(i => i.id === itemData.id && i.count < i.maxStack);
+        if (existingItem) {
+            if (existingItem.count + addCount <= existingItem.maxStack) { existingItem.count += addCount; return true; }
+        }
+    }
+    if (tab.items.length < tab.capacity) {
+        let newItem = JSON.parse(JSON.stringify(itemData));
+        newItem.count = addCount; 
+        tab.items.push(newItem);
+        return true;
+    }
+    return false; 
+};
 
 window.checkPlayerDeath = function() {
     if (window.player.hp <= 0) {
@@ -33,9 +68,6 @@ window.checkPlayerDeath = function() {
         }
     }
 };
-
-// --- アイテムの定義と管理 ---
-window.droppedItems = [];
 
 // --- 敵の定義と生成 ---
 window.createEnemy = function(options) {
@@ -95,13 +127,19 @@ window.updateEnemies = function(dt) {
                 }
             }
             
-            if (Math.random() > 0.5) { 
-                const itemType = Math.random() > 0.5 ? 'potion' : 'coin';
+            // ★変更: itemDB.js のマスターデータを参照してドロップ
+            if (Math.random() > 0.3) { 
+                const keys = Object.keys(window.ITEM_DB);
+                const randomKey = keys[Math.floor(Math.random() * keys.length)];
+                const baseItem = window.ITEM_DB[randomKey];
+                
                 window.droppedItems.push({
-                    id: Date.now() + Math.random(), 
-                    x: e.x, y: e.y, radius: 8, type: itemType,
-                    color: itemType === 'potion' ? '#00ff00' : '#ffd700',
-                    ownerId: ownerId, lifeTime: 0       
+                    uid: Date.now() + Math.random(),
+                    id: baseItem.id, 
+                    type: baseItem.type, equipSlot: baseItem.equipSlot, name: baseItem.name, rarity: baseItem.rarity,
+                    color: baseItem.color, desc: baseItem.desc, stats: baseItem.stats, restore: baseItem.restore,
+                    maxStack: baseItem.maxStack, count: 1, 
+                    x: e.x, y: e.y, radius: 8, ownerId: ownerId, lifeTime: 0       
                 });
             }
 

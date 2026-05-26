@@ -1,0 +1,251 @@
+// =========================================================
+// ui.js
+// UIの制御、イベントリスナー、インベントリの描画処理
+// =========================================================
+
+window.tabsList = ['equip', 'consume', 'skill', 'etc', 'important'];
+window.currentTabIndex = 0;
+window.selectedItemIndex = -1;
+
+// Loader側から、HTML(DOM)の読み込みが完了した後に呼ばれる初期化関数
+window.initUI = function() {
+    window.invWindow = document.getElementById('invWindow');
+    const invTitleBar = document.getElementById('invTitleBar');
+    const invGrid = document.getElementById('invGrid');
+    const itemDetail = document.getElementById('itemDetail');
+    const invTabs = document.getElementById('invTabs');
+    const tabIndicator = document.getElementById('tabIndicator');
+    const invContent = document.getElementById('invContent');
+    const goldAmountDisplay = document.getElementById('goldAmount'); 
+
+    // ------------------------------------
+    // UI制御関数の定義
+    // ------------------------------------
+    window.updateTabIndicator = function() {
+        const currentTabName = window.tabsList[window.currentTabIndex];
+        const activeTab = document.querySelector(`.inv-tab[data-tab="${currentTabName}"]`);
+        if (activeTab && tabIndicator && window.invWindow.style.display === 'flex') {
+            tabIndicator.style.left = `${activeTab.offsetLeft}px`;
+            tabIndicator.style.width = `${activeTab.offsetWidth}px`;
+        }
+    };
+
+    window.switchTab = function(index) {
+        if (index < 0) index = 0;
+        if (index >= window.tabsList.length) index = window.tabsList.length - 1;
+        if (window.currentTabIndex === index) return;
+        
+        window.currentTabIndex = index;
+        const currentTabName = window.tabsList[window.currentTabIndex];
+        
+        document.querySelectorAll('.inv-tab').forEach(btn => btn.classList.remove('active'));
+        const activeTab = document.querySelector(`.inv-tab[data-tab="${currentTabName}"]`);
+        if(activeTab) activeTab.classList.add('active');
+        
+        window.updateTabIndicator();
+        itemDetail.style.display = 'none';
+        invContent.scrollTop = 0;
+        window.renderInventory();
+    };
+
+    window.toggleInventory = function() {
+        if (window.invWindow.style.display === 'flex') {
+            window.invWindow.style.display = 'none'; 
+            itemDetail.style.display = 'none';
+        } else {
+            window.invWindow.style.display = 'flex'; 
+            window.invWindow.style.top = '10%'; 
+            window.invWindow.style.left = '5%';
+            window.renderInventory();
+            setTimeout(window.updateTabIndicator, 10); 
+        }
+    };
+
+    window.renderInventory = function() {
+        if (!invGrid) return;
+        invGrid.innerHTML = '';
+        const currentTabName = window.tabsList[window.currentTabIndex];
+        const tabData = window.player.inventory[currentTabName];
+        
+        if (goldAmountDisplay) goldAmountDisplay.innerText = window.player.gold.toLocaleString();
+        
+        for (let i = 0; i < tabData.capacity; i++) {
+            const slot = document.createElement('div');
+            slot.className = 'inv-slot';
+            
+            if (i < tabData.items.length) {
+                const item = tabData.items[i];
+                slot.classList.add(`rarity-${item.rarity}`);
+                slot.innerHTML = `<div class="item-icon" style="background-color: ${item.color};"></div>`;
+                if (item.maxStack > 1) slot.innerHTML += `<div class="item-count">${item.count}</div>`;
+                if (item.isEquipped) slot.innerHTML += `<div class="item-equip-mark">E</div>`;
+                
+                slot.addEventListener('pointerdown', (e) => { slot.dataset.startX = e.clientX; slot.dataset.startY = e.clientY; });
+                slot.addEventListener('pointerup', (e) => {
+                    const sx = parseFloat(slot.dataset.startX || e.clientX); const sy = parseFloat(slot.dataset.startY || e.clientY);
+                    if (Math.abs(e.clientX - sx) < 10 && Math.abs(e.clientY - sy) < 10) window.showItemDetail(item, i);
+                });
+            }
+            invGrid.appendChild(slot);
+        }
+        
+        const expandBtn = document.createElement('div'); expandBtn.className = 'inv-slot expand-btn'; expandBtn.innerHTML = '＋';
+        expandBtn.addEventListener('pointerdown', (e) => { expandBtn.dataset.startX = e.clientX; expandBtn.dataset.startY = e.clientY; });
+        expandBtn.addEventListener('pointerup', (e) => {
+            const sx = parseFloat(expandBtn.dataset.startX || e.clientX); const sy = parseFloat(expandBtn.dataset.startY || e.clientY);
+            if (Math.abs(e.clientX - sx) < 10 && Math.abs(e.clientY - sy) < 10) { tabData.capacity += 4; window.renderInventory(); }
+        });
+        invGrid.appendChild(expandBtn);
+    };
+
+    window.showItemDetail = function(item, index) {
+        window.selectedItemIndex = index;
+        document.getElementById('detailName').innerText = item.name;
+        document.getElementById('detailName').style.color = window.RARITY[item.rarity].color;
+        document.getElementById('detailType').innerText = `${item.type} / ${item.rarity}`;
+        
+        let descText = item.desc;
+        if (item.stats) {
+            if (item.stats.atk) descText += `\n攻撃力: +${item.stats.atk}`;
+            if (item.stats.hp) descText += `\n最大HP: +${item.stats.hp}`;
+        }
+        document.getElementById('detailDesc').innerText = descText;
+        
+        const btnUseEquip = document.getElementById('btnUseEquip');
+        if (item.type === 'equip') {
+            btnUseEquip.style.display = 'block';
+            if (item.isEquipped) { btnUseEquip.innerText = 'はずす'; btnUseEquip.className = 'detail-btn btn-unequip'; } 
+            else { btnUseEquip.innerText = '装備'; btnUseEquip.className = 'detail-btn btn-equip'; }
+        } else if (item.type === 'consume') {
+            btnUseEquip.innerText = '使用'; btnUseEquip.className = 'detail-btn'; btnUseEquip.style.display = 'block';
+        } else {
+            btnUseEquip.style.display = 'none'; 
+        }
+        itemDetail.style.display = 'flex';
+    };
+
+    // ------------------------------------
+    // イベントリスナーの登録
+    // ------------------------------------
+    document.getElementById('bagBtn').addEventListener('pointerdown', (e) => { e.stopPropagation(); window.toggleInventory(); });
+    document.getElementById('invCloseBtn').addEventListener('pointerdown', (e) => { e.stopPropagation(); window.toggleInventory(); });
+
+    let isDraggingInv = false; let dragOffsetX = 0; let dragOffsetY = 0;
+    invTitleBar.addEventListener('pointerdown', (e) => {
+        if(e.target.id === 'invCloseBtn') return;
+        isDraggingInv = true; const rect = window.invWindow.getBoundingClientRect();
+        dragOffsetX = e.clientX - rect.left; dragOffsetY = e.clientY - rect.top; e.stopPropagation();
+    });
+    window.addEventListener('pointermove', (e) => {
+        if (isDraggingInv) { window.invWindow.style.left = `${e.clientX - dragOffsetX}px`; window.invWindow.style.top = `${e.clientY - dragOffsetY}px`; }
+    });
+    window.addEventListener('pointerup', () => { isDraggingInv = false; });
+
+    let isDraggingTab = false;
+    invTabs.addEventListener('pointerdown', (e) => {
+        isDraggingTab = true; handleTabDrag(e); e.stopPropagation();
+    });
+    window.addEventListener('pointermove', (e) => { if (isDraggingTab) handleTabDrag(e); });
+    window.addEventListener('pointerup', () => { isDraggingTab = false; });
+    window.addEventListener('pointercancel', () => { isDraggingTab = false; });
+
+    function handleTabDrag(e) {
+        const elem = document.elementFromPoint(e.clientX, e.clientY);
+        if (elem && elem.classList.contains('inv-tab')) {
+            const tabName = elem.getAttribute('data-tab');
+            const idx = window.tabsList.indexOf(tabName);
+            if (idx !== -1) window.switchTab(idx);
+        }
+    }
+
+    let contentStartX = 0; let contentStartY = 0; let isContentSwiping = false;
+    invContent.addEventListener('pointerdown', (e) => { contentStartX = e.clientX; contentStartY = e.clientY; isContentSwiping = true; });
+    invContent.addEventListener('pointerup', (e) => {
+        if (!isContentSwiping) return;
+        isContentSwiping = false;
+        let dx = e.clientX - contentStartX; let dy = e.clientY - contentStartY;
+        if (Math.abs(dx) > 30 && Math.abs(dx) > Math.abs(dy)) {
+            if (dx < 0) window.switchTab(window.currentTabIndex + 1); 
+            else window.switchTab(window.currentTabIndex - 1);        
+        }
+    });
+    invContent.addEventListener('pointercancel', () => { isContentSwiping = false; });
+
+    // アクションボタンとアイテム詳細のボタン
+    document.getElementById('btnDetailClose').addEventListener('pointerdown', (e) => {
+        e.stopPropagation(); itemDetail.style.display = 'none';
+    });
+
+    document.getElementById('btnUseEquip').addEventListener('pointerdown', (e) => {
+        e.stopPropagation();
+        const currentTabName = window.tabsList[window.currentTabIndex];
+        const tabData = window.player.inventory[currentTabName];
+        const item = tabData.items[window.selectedItemIndex];
+        if (!item) return;
+
+        if (item.type === 'consume') {
+            if (item.restore) window.player.hp = Math.min(window.player.maxHp, window.player.hp + item.restore);
+            item.count--;
+            if (item.count <= 0) { tabData.items.splice(window.selectedItemIndex, 1); window.selectedItemIndex = -1; }
+        } else if (item.type === 'equip') {
+            if (item.isEquipped) {
+                item.isEquipped = false; window.player.equipped[item.equipSlot] = null;
+            } else {
+                tabData.items.forEach(i => { if (i.equipSlot === item.equipSlot) i.isEquipped = false; });
+                item.isEquipped = true; window.player.equipped[item.equipSlot] = item;
+            }
+            window.updatePlayerStats(); 
+        }
+        itemDetail.style.display = 'none'; window.renderInventory();
+    });
+
+    document.getElementById('btnDrop').addEventListener('pointerdown', (e) => {
+        e.stopPropagation();
+        const currentTabName = window.tabsList[window.currentTabIndex];
+        const tabData = window.player.inventory[currentTabName];
+        const item = tabData.items[window.selectedItemIndex];
+        if (!item) return;
+
+        if (item.isEquipped) { item.isEquipped = false; window.player.equipped[item.equipSlot] = null; window.updatePlayerStats(); }
+
+        item.count--;
+        if (item.count <= 0) { tabData.items.splice(window.selectedItemIndex, 1); window.selectedItemIndex = -1; }
+
+        window.droppedItems.push({
+            uid: Date.now() + Math.random(), id: item.id, 
+            type: item.type, equipSlot: item.equipSlot, name: item.name, rarity: item.rarity, 
+            color: item.color, desc: item.desc, stats: item.stats, restore: item.restore, maxStack: item.maxStack,
+            count: 1, x: window.player.x, y: window.player.y, radius: 8, ownerId: window.player.id, lifeTime: 0
+        });
+
+        itemDetail.style.display = 'none'; window.renderInventory();
+    });
+
+    document.getElementById('attackBtn').addEventListener('pointerdown', (e) => {
+        e.stopPropagation(); window.player.targetItem = null; 
+        if (window.player.targetEnemy && window.player.targetEnemy.state !== 'dead') {
+            window.player.isAutoAttacking = true; window.playerPath = window.findPath(window.player.x, window.player.y, window.player.targetEnemy.x, window.player.targetEnemy.y);
+        } else {
+            let closest = null; let minDist = Infinity;
+            for (const enemy of window.enemies) {
+                if (enemy.state !== 'dead') {
+                    const dist = Math.hypot(enemy.x - window.player.x, enemy.y - window.player.y);
+                    if (dist < minDist) { minDist = dist; closest = enemy; }
+                }
+            }
+            if (closest) { window.player.targetEnemy = closest; window.player.isAutoAttacking = false; }
+        }
+    });
+
+    document.getElementById('lootBtn').addEventListener('pointerdown', (e) => {
+        e.stopPropagation(); window.player.targetEnemy = null; window.player.isAutoAttacking = false;
+        let closestItem = null; let minDist = Infinity;
+        for (const item of window.droppedItems) {
+            if (item.ownerId === null || item.ownerId === window.player.id) {
+                const dist = Math.hypot(item.x - window.player.x, item.y - window.player.y);
+                if (dist < minDist) { minDist = dist; closestItem = item; }
+            }
+        }
+        if (closestItem) { window.player.targetItem = closestItem; window.playerPath = window.findPath(window.player.x, window.player.y, closestItem.x, closestItem.y); }
+    });
+};

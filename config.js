@@ -19,8 +19,9 @@ window.obstacles = [
     { x: window.world.width / 2 - 100, y: window.world.height / 2 - 200, width: 300, height: 50, color: '#228B22' }
 ];
 
-// アイテムが所有権フリーになるまでの時間（秒）
+// アイテム関連のグローバル変数
 window.FREE_LOOT_TIME = 300; 
+window.droppedItems = []; // ★追加: フィールド上のドロップアイテムを管理する配列
 
 // =========================================================
 // Canvasとリサイズ処理

@@ -15,7 +15,15 @@ function updateInputPos(e) {
 
 // --- 入力イベント (タップ/長押し) ---
 window.addEventListener('pointerdown', (e) => {
-    if(e.target !== window && e.target !== document.body && e.target !== window.canvas) return;
+    const itemDetail = document.getElementById('itemDetail');
+    const invWindow = document.getElementById('invWindow');
+    
+    if (itemDetail && itemDetail.style.display === 'flex' && !itemDetail.contains(e.target) && !e.target.closest('.inv-slot')) {
+        itemDetail.style.display = 'none';
+    }
+    // UIをタップした場合は移動キャンセル
+    if ((invWindow && e.target.closest('#invWindow')) || (itemDetail && e.target.closest('#itemDetail')) || e.target.tagName === 'BUTTON') return;
+    
     input.isDown = true; updateInputPos(e); pointerDownTime = performance.now();
     window.playerPath = []; window.player.isAutoAttacking = false; window.player.targetItem = null; 
 });
@@ -68,53 +76,6 @@ window.addEventListener('pointerup', handlePointerUp);
 window.addEventListener('pointercancel', handlePointerUp); 
 window.addEventListener('pointerout', handlePointerUp);
 
-// --- UIボタンイベント ---
-setTimeout(() => { // DOM読み込み待ちの簡易対策
-    const attackBtn = document.getElementById('attackBtn');
-    if(attackBtn) {
-        attackBtn.addEventListener('pointerdown', (e) => {
-            e.stopPropagation(); 
-            window.player.targetItem = null; 
-            if (window.player.targetEnemy && window.player.targetEnemy.state !== 'dead') {
-                window.player.isAutoAttacking = true;
-                window.playerPath = window.findPath(window.player.x, window.player.y, window.player.targetEnemy.x, window.player.targetEnemy.y, window.player.radius);
-            } else {
-                let closest = null; let minDist = Infinity;
-                for (const enemy of window.enemies) {
-                    if (enemy.state !== 'dead') {
-                        const dist = Math.hypot(enemy.x - window.player.x, enemy.y - window.player.y);
-                        if (dist < minDist) { minDist = dist; closest = enemy; }
-                    }
-                }
-                if (closest) { window.player.targetEnemy = closest; window.player.isAutoAttacking = false; }
-            }
-        });
-        attackBtn.addEventListener('pointerup', (e) => e.stopPropagation()); 
-        attackBtn.addEventListener('pointercancel', (e) => e.stopPropagation());
-    }
-
-    const lootBtn = document.getElementById('lootBtn');
-    if(lootBtn){
-        lootBtn.addEventListener('pointerdown', (e) => {
-            e.stopPropagation();
-            window.player.targetEnemy = null; window.player.isAutoAttacking = false;
-            let closestItem = null; let minDist = Infinity;
-            for (const item of window.droppedItems) {
-                if (item.ownerId === null || item.ownerId === window.player.id) {
-                    const dist = Math.hypot(item.x - window.player.x, item.y - window.player.y);
-                    if (dist < minDist) { minDist = dist; closestItem = item; }
-                }
-            }
-            if (closestItem) {
-                window.player.targetItem = closestItem;
-                window.playerPath = window.findPath(window.player.x, window.player.y, closestItem.x, closestItem.y, window.player.radius);
-            }
-        });
-        lootBtn.addEventListener('pointerup', (e) => e.stopPropagation()); 
-        lootBtn.addEventListener('pointercancel', (e) => e.stopPropagation());
-    }
-}, 500); // UIボタンのバインドは0.5秒遅延（確実なDOM描画後）
-
 
 // ==========================================
 // 更新処理 (Update)
@@ -157,17 +118,23 @@ function update(dt, timestamp) {
         }
     }
     
-    // アイテム回収処理
+    // アイテム回収処理（★修正箇所）
     if (window.player.targetItem) {
-        const itemIndex = window.droppedItems.findIndex(i => i.id === window.player.targetItem.id);
+        const itemIndex = window.droppedItems.findIndex(i => i.uid === window.player.targetItem.uid);
         if (itemIndex !== -1) {
             const item = window.droppedItems[itemIndex];
             if (item.ownerId === null || item.ownerId === window.player.id) {
                 const distToItem = Math.hypot(item.x - window.player.x, item.y - window.player.y);
                 if (distToItem <= window.player.pickupRange) {
                     shouldMove = false; window.playerPath = [];
-                    if (item.type === 'potion') window.player.hp = Math.min(window.player.maxHp, window.player.hp + 30); 
-                    window.droppedItems.splice(itemIndex, 1);
+                    
+                    // インベントリへの追加を試みる
+                    const added = window.addItemToInventory(item);
+                    if (added) {
+                        window.droppedItems.splice(itemIndex, 1);
+                        const invWindow = document.getElementById('invWindow');
+                        if (invWindow && invWindow.style.display === 'flex') window.renderInventory();
+                    }
                     window.player.targetItem = null;
                 } else {
                     if (window.playerPath.length === 0) window.playerPath = window.findPath(window.player.x, window.player.y, item.x, item.y, window.player.radius);
@@ -222,7 +189,7 @@ function update(dt, timestamp) {
     if (screenY < centerY - window.camera.deadZoneY) window.camera.y -= (centerY - window.camera.deadZoneY) - screenY;
     else if (screenY > centerY + window.camera.deadZoneY) window.camera.y += screenY - (centerY + window.camera.deadZoneY);
     window.camera.x = Math.max(0, Math.min(window.camera.x, window.world.width - window.camera.width));
-    window.camera.y = Math.max(0, Math.min(window.camera.y, window.world.height - window.camera.height));
+    window.camera.y = Math.max(0, Math.min(window.camera.y, world.height - window.camera.height));
 }
 
 // ==========================================
@@ -260,7 +227,7 @@ function draw() {
         }
         ctx.globalAlpha = 1.0; 
         
-        if (window.player.targetItem && window.player.targetItem.id === item.id) {
+        if (window.player.targetItem && window.player.targetItem.uid === item.uid) {
             ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2;
             ctx.strokeRect(item.x - item.radius - 2, item.y - item.radius - 2, item.radius * 2 + 4, item.radius * 2 + 4);
         }
