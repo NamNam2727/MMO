@@ -19,6 +19,17 @@ window.initUI = function() {
     const invContent = document.getElementById('invContent');
     const goldAmountDisplay = document.getElementById('goldAmount'); 
 
+    // ★追加: ステータス画面のヘッダー（❌ボタン含む）を上部に固定(Sticky)する
+    const statHeader = document.querySelector('#statusWindow .stat-header');
+    if (statHeader) {
+        statHeader.style.position = 'sticky';
+        statHeader.style.top = '-15px'; // ウィンドウのpadding分を相殺して一番上に配置
+        statHeader.style.backgroundColor = 'rgba(20,20,20,0.95)'; // 背景を塗りつぶして裏の文字を隠す
+        statHeader.style.zIndex = '10';
+        statHeader.style.margin = '-15px -15px 10px -15px';
+        statHeader.style.padding = '15px 15px 5px 15px';
+    }
+
     // ------------------------------------
     // 左上ウィジェット・ステータス画面の更新関数
     // ------------------------------------
