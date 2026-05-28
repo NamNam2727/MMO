@@ -19,7 +19,7 @@ window.initUI = function() {
     const invContent = document.getElementById('invContent');
     const goldAmountDisplay = document.getElementById('goldAmount'); 
 
-    // ★修正: ステータス画面のヘッダーを上部固定にして、スクロールしても❌ボタンが動かないようにする
+    // ★修正: ステータス画面のヘッダー上部固定と、不要な横スクロールの禁止
     const statHeader = document.querySelector('#statusWindow .stat-header');
     if (statHeader) {
         statHeader.style.position = 'sticky';
@@ -28,6 +28,12 @@ window.initUI = function() {
         statHeader.style.zIndex = '10';
         statHeader.style.margin = '-15px -15px 10px -15px'; 
         statHeader.style.padding = '15px 15px 5px 15px'; 
+        
+        // ★追加: 横揺れ（左右スクロール）を無効化
+        const statusWindowObj = document.getElementById('statusWindow');
+        if (statusWindowObj) {
+            statusWindowObj.style.overflowX = 'hidden';
+        }
     }
 
     // ------------------------------------
