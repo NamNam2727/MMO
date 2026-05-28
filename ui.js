@@ -1,3 +1,4 @@
+```javascript
 // =========================================================
 // ui.js
 // UIの制御、イベントリスナー、インベントリ・ステータスの描画処理
@@ -19,15 +20,15 @@ window.initUI = function() {
     const invContent = document.getElementById('invContent');
     const goldAmountDisplay = document.getElementById('goldAmount'); 
 
-    // ★追加: ステータス画面のヘッダー（❌ボタン含む）を上部に固定(Sticky)する
+    // ★修正: ステータス画面のヘッダーを上部固定にして、スクロールしても❌ボタンが動かないようにする
     const statHeader = document.querySelector('#statusWindow .stat-header');
     if (statHeader) {
         statHeader.style.position = 'sticky';
-        statHeader.style.top = '-15px'; // ウィンドウのpadding分を相殺して一番上に配置
-        statHeader.style.backgroundColor = 'rgba(20,20,20,0.95)'; // 背景を塗りつぶして裏の文字を隠す
+        statHeader.style.top = '-15px'; // 親ウィンドウのpadding分を相殺
+        statHeader.style.backgroundColor = 'rgba(20,20,20,0.95)'; // 背景と同色にして下の文字を隠す
         statHeader.style.zIndex = '10';
-        statHeader.style.margin = '-15px -15px 10px -15px';
-        statHeader.style.padding = '15px 15px 5px 15px';
+        statHeader.style.margin = '-15px -15px 10px -15px'; 
+        statHeader.style.padding = '15px 15px 5px 15px'; 
     }
 
     // ------------------------------------
@@ -315,9 +316,14 @@ window.initUI = function() {
         minusBtn.addEventListener('pointerdown', (e) => { e.stopPropagation(); if (currentCount > 1) { currentCount--; updateDisplay(); } });
         plusBtn.addEventListener('pointerdown', (e) => { e.stopPropagation(); if (currentCount < item.count) { currentCount++; updateDisplay(); } });
         slider.addEventListener('pointerdown', (e) => { e.stopPropagation(); });
-        slider.addEventListener('input', (e) => { currentCount = parseInt(e.target.value, 10); countDisplay.innerText = currentCount + ' 個'; });
+        slider.addEventListener('input', (e) => {
+            currentCount = parseInt(e.target.value, 10);
+            countDisplay.innerText = currentCount + ' 個';
+        });
 
-        countContainer.appendChild(minusBtn); countContainer.appendChild(countDisplay); countContainer.appendChild(plusBtn);
+        countContainer.appendChild(minusBtn);
+        countContainer.appendChild(countDisplay);
+        countContainer.appendChild(plusBtn);
 
         const okBtn = document.createElement('button');
         okBtn.innerText = '決定'; okBtn.style.backgroundColor = '#663'; okBtn.style.color = 'white';
@@ -499,3 +505,6 @@ window.initUI = function() {
         }
     });
 };
+
+
+```
