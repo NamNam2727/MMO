@@ -27,6 +27,7 @@ window.addEventListener('pointerdown', (e) => {
         (itemDetail && e.target.closest('#itemDetail')) || 
         (statWindow && e.target.closest('#statusWindow')) || 
         e.target.closest('#playerWidget') || 
+        e.target.closest('#bottomUIContainer') || // ★追加: 左下スライドUI操作時の移動貫通防止
         e.target.tagName === 'BUTTON' || 
         e.target.tagName === 'SELECT' || 
         e.target.tagName === 'INPUT') return;
@@ -35,9 +36,13 @@ window.addEventListener('pointerdown', (e) => {
     window.playerPath = []; window.player.isAutoAttacking = false; window.player.targetItem = null; 
 });
 
-window.addEventListener('pointermove', (e) => { if (input.isDown) updateInputPos(e); });
+window.addEventListener('pointermove', (e) => { 
+    if (window.isScDragging) return; // ★追加: カルーセルスワイプ中は移動処理させない
+    if (input.isDown) updateInputPos(e); 
+});
 
 function handlePointerUp(e) {
+    if (window.isScDragging) return; // ★追加: カルーセルスワイプ終了時は移動させない
     if (input.isDown) {
         const currentTime = performance.now();
         if (currentTime - pointerDownTime < 200) {
@@ -102,11 +107,11 @@ window.addEventListener('pointerout', handlePointerUp);
 function update(dt, timestamp) {
     if (window.player.attackCooldown > 0) window.player.attackCooldown -= dt;
     
-    // ★追加: 凍結と感電の判定
+    // 凍結と感電の判定
     let pIsFrozen = window.player.effects.some(e => e.type === 'ice' && e.duration > 0);
     let pIsShocked = window.player.effects.some(e => e.type === 'lightning' && e.duration > 0);
     
-    // ★追加: 凍結中、または攻撃直後のクールダウン中は移動不可
+    // 凍結中、または攻撃直後のクールダウン中は移動不可
     let isMovementBlocked = pIsFrozen || window.player.attackCooldown > 0;
 
     if(typeof window.updateEffects === 'function') window.updateEffects(window.player, dt);
@@ -143,13 +148,18 @@ function update(dt, timestamp) {
                 window.player.targetEnemy.hateTable[window.player.id] = (window.player.targetEnemy.hateTable[window.player.id] || 0) + window.player.atk;
                 window.player.targetEnemy.damageTable[window.player.id] = (window.player.targetEnemy.damageTable[window.player.id] || 0) + actualDamage;
                 
-                // ★追加: 感電時はクールダウン1.5倍
+                // ★追加: 与ダメージログの出力
+                if (typeof window.addLog === 'function' && typeof window.getEntityName === 'function') {
+                    window.addLog(`${window.getEntityName(window.player)} は ${window.getEntityName(window.player.targetEnemy)} に <span class='color-damage'>${Math.floor(actualDamage)}</span> ダメージを与えた！`, 'damage');
+                }
+
+                // 感電時はクールダウン1.5倍
                 let pCdRate = window.player.attackRate; 
                 if (pIsShocked) pCdRate *= 1.5;
                 window.player.attackCooldown = pCdRate; 
                 isMovementBlocked = true; // 攻撃した瞬間から移動不可
                 
-                // ★追加: 属性攻撃の適用
+                // 属性攻撃の適用
                 if (window.player.equipped.weapon && window.player.equipped.weapon.element) {
                     if(typeof window.applyElementEffect === 'function') {
                         window.applyElementEffect(window.player, window.player.targetEnemy, window.player.equipped.weapon.element, window.player.equipped.weapon.elementParams);
@@ -175,6 +185,10 @@ function update(dt, timestamp) {
                     const added = window.addItemToInventory(item);
                     if (added) {
                         window.droppedItems.splice(itemIndex, 1);
+                        // ★追加: アイテム取得ログの出力
+                        if (typeof window.addLog === 'function') {
+                            window.addLog(`<span class='color-item'>${item.name}</span> を獲得した！`, 'item');
+                        }
                         const invWindow = document.getElementById('invWindow');
                         if (invWindow && invWindow.style.display === 'flex' && typeof window.renderInventory === 'function') {
                             window.renderInventory();
@@ -194,12 +208,12 @@ function update(dt, timestamp) {
         }
     }
 
-    // ★追加: 感電中は移動速度半減
+    // 感電中は移動速度半減
     let currentSpeed = window.player.speed;
     if (pIsShocked) currentSpeed *= 0.5;
     const moveDistance = currentSpeed * dt;
 
-    // ★追加: 硬直中でなければ移動を適用
+    // 硬直中でなければ移動を適用
     if (!isMovementBlocked && shouldMove) {
         if (input.isDown) {
             window.player.targetX = input.screenX + window.camera.x; window.player.targetY = input.screenY + window.camera.y;
@@ -255,7 +269,7 @@ function update(dt, timestamp) {
 // 描画処理 (Draw)
 // ==========================================
 
-// ★追加: 状態異常のアイコン描画関数
+// 状態異常のアイコン描画関数
 function drawStatusIcons(entity, ctx) {
     if (!entity.effects || entity.effects.length === 0) return;
     const icons = { 'fire':'🔥', 'ice':'🧊', 'lightning':'⚡️', 'wind':'🌪️' };
@@ -287,7 +301,7 @@ function drawStatusIcons(entity, ctx) {
     });
 }
 
-// ★追加: 状態異常エフェクトの描画関数
+// 状態異常エフェクトの描画関数
 function drawStatusEffects(entity, ctx) {
     if (entity.state === 'dead' || !entity.effects) return;
     let isFrozen = entity.effects.some(e => e.type === 'ice' && e.duration > 0);
@@ -364,7 +378,7 @@ function draw() {
         ctx.fillStyle = enemy.color; ctx.fill();
         ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke();
         
-        drawStatusEffects(enemy, ctx); // ★敵のステータスエフェクト描画
+        drawStatusEffects(enemy, ctx); 
         
         if (enemy.state === 'chase' || enemy.state === 'attack') {
             ctx.fillStyle = 'red'; ctx.font = 'bold 16px sans-serif'; ctx.fillText('!', enemy.x - 5, enemy.y - enemy.radius - 20);
@@ -396,7 +410,7 @@ function draw() {
     ctx.fillStyle = (window.player.attackCooldown > window.player.attackRate - 0.1 && window.player.targetEnemy && window.player.isAutoAttacking && !pIsFrozen) ? '#ffffff' : window.player.color;
     ctx.fill(); ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke();
 
-    drawStatusEffects(window.player, ctx); // ★プレイヤーのステータスエフェクト描画
+    drawStatusEffects(window.player, ctx); 
 
     const phpWidth = 40; const phpHeight = 6; const phpRatio = window.player.hp / window.player.maxHp;
     ctx.fillStyle = 'black'; ctx.fillRect(window.player.x - phpWidth / 2, window.player.y - window.player.radius - 15, phpWidth, phpHeight);
@@ -418,3 +432,10 @@ window.gameLoop = function(timestamp) {
     draw(); 
     requestAnimationFrame(window.gameLoop);
 };
+
+// ★追加: 初期化時の実行処理
+if (typeof window.addLog === 'function') {
+    window.addLog("<span class='color-sys'>システム: システムを起動しました。</span>", 'sys'); 
+}
+if (typeof window.updatePlayerStats === 'function') window.updatePlayerStats();
+if (typeof window.updateWidgetUI === 'function') window.updateWidgetUI();

@@ -97,6 +97,11 @@ window.addExp = function(amount) {
         window.player.nextExp = window.player.level * 100;
         window.player.statPoints += 5; 
         leveledUp = true;
+        
+        // ★ログ追加: レベルアップ
+        if(typeof window.addLog === 'function') {
+            window.addLog(`<span class='color-sys'>レベルが <span class='color-player'>${window.player.level}</span> に上がった！ステータスポイントを獲得！</span>`, 'exp');
+        }
     }
     if (leveledUp) { 
         window.updatePlayerStats(); 
@@ -131,6 +136,11 @@ window.addItemToInventory = function(itemData) {
 
 window.checkPlayerDeath = function() {
     if (window.player.hp <= 0) {
+        // ★ログ追加: 死亡
+        if(typeof window.addLog === 'function' && typeof window.getEntityName === 'function') {
+            window.addLog(`<span class='color-sys'>${window.getEntityName(window.player)} は力尽きた...</span>`, 'sys');
+        }
+
         window.player.x = window.world.width / 2; window.player.y = window.world.height / 2;
         window.player.targetX = window.player.x; window.player.targetY = window.player.y;
         window.player.hp = window.player.maxHp;
@@ -146,6 +156,9 @@ window.checkPlayerDeath = function() {
         if (typeof window.updateWidgetUI === 'function') window.updateWidgetUI();
     }
 };
+
+// 属性変換用テキスト定義
+window.transElement = { 'fire':'炎上', 'ice':'凍結', 'lightning':'感電', 'wind':'風圧', 'earth':'地' };
 
 // --- 属性効果の付与ロジック ---
 window.applyElementEffect = function(attacker, target, element, params = {}, skillId = 'basic') {
@@ -179,6 +192,11 @@ window.applyElementEffect = function(attacker, target, element, params = {}, ski
     // 状態異常を受けた回数をカウントアップし、免疫時間を計算
     target.effectCounts[effectId] = (target.effectCounts[effectId] || 0) + 1;
     let immuneTime = duration * target.effectCounts[effectId]; // 回数分だけ免疫時間が倍増
+
+    // ★ログ追加: 状態異常の付与
+    if(typeof window.addLog === 'function' && typeof window.getEntityName === 'function') {
+        window.addLog(`${window.getEntityName(attacker)} は ${window.getEntityName(target)} に <span class='color-status'>【${window.transElement[element]}】</span> を与えた！`, 'damage');
+    }
 
     // 凍結・感電の「一番長いもので上書き」処理
     if (element === 'ice' || element === 'lightning') {
@@ -285,9 +303,16 @@ window.updateEnemies = function(dt) {
                 totalDamage += e.damageTable[id]; 
                 if (e.damageTable[id] > topDamage) { topDamage = e.damageTable[id]; ownerId = id; } 
             }
+            
             if (e.damageTable[window.player.id]) { 
                 const myShare = e.damageTable[window.player.id] / totalDamage; 
-                window.addExp(Math.ceil(e.expReward * myShare)); 
+                const expGain = Math.ceil(e.expReward * myShare);
+                window.addExp(expGain); 
+                
+                // ★ログ追加: 敵討伐・経験値取得
+                if(typeof window.addLog === 'function' && typeof window.getEntityName === 'function') {
+                    window.addLog(`${window.getEntityName(e)} を倒し、<span class='color-exp'>${expGain} EXP</span> を獲得した！`, 'exp');
+                }
             }
             
             if (Math.random() > 0.3) { 
@@ -355,6 +380,11 @@ window.updateEnemies = function(dt) {
                     const actualDamage = Math.max(1, e.attackDamage * (100 / (100 + window.player.armor))); 
                     currentTarget.hp -= actualDamage; 
                     
+                    // ★ログ追加: 敵からの被ダメージ
+                    if(typeof window.addLog === 'function' && typeof window.getEntityName === 'function') {
+                        window.addLog(`${window.getEntityName(e)} は ${window.getEntityName(currentTarget)} に <span class='color-damage'>${Math.floor(actualDamage)}</span> ダメージを与えた！`, 'damage');
+                    }
+                    
                     let cdRate = e.attackRate; if (isShocked) cdRate *= 1.5; 
                     e.attackCooldown = cdRate; 
                     isMovementBlocked = true;
@@ -366,7 +396,6 @@ window.updateEnemies = function(dt) {
             } else {
                 e.state = 'chase'; e.timers.pathCalc -= dt;
                 if (e.timers.pathCalc <= 0) { 
-                    // findPathは main.js で window に登録されている想定
                     if (typeof window.findPath === 'function') {
                         e.path = window.findPath(e.x, e.y, currentTarget.x, currentTarget.y); 
                     }

@@ -1,12 +1,71 @@
 // =========================================================
 // ui.js
-// UIの制御、イベントリスナー、インベントリ・ステータスの描画処理
+// UIの制御、イベントリスナー、インベントリ・ステータス・ログの描画処理
 // =========================================================
 
 window.tabsList = ['equip', 'consume', 'skill', 'etc', 'important'];
 window.currentTabIndex = 0;
 window.selectedItemIndex = -1;
 window.tempStats = { str: 0, int: 0, vit: 0 }; // 仮振り用のステータス保持
+
+// =========================================================
+// ★ ログシステム制御
+// =========================================================
+window.getEntityName = function(entity) {
+    if (!entity) return "";
+    return entity.id === 'p1' ? "<span class='color-player'>プレイヤー</span>" : "<span class='color-enemy'>モンスター</span>";
+};
+
+window.addLog = function(htmlText, type = 'sys') {
+    const fullLogContent = document.getElementById('fullLogContent');
+    if (!fullLogContent) return; // UIが初期化されていない場合はスキップ
+
+    const fullLine = document.createElement('div');
+    fullLine.className = `full-log-line log-type-${type}`;
+    fullLine.innerHTML = htmlText;
+    fullLogContent.appendChild(fullLine);
+    fullLogContent.scrollTop = fullLogContent.scrollHeight; 
+
+    // チャットタブには「チャット」と「システム」のログを流す
+    if (type === 'chat' || type === 'sys') {
+        const chatLogContent = document.getElementById('chatLogContent');
+        if (chatLogContent) {
+            const chatLine = document.createElement('div');
+            chatLine.className = `full-log-line log-type-${type}`;
+            chatLine.innerHTML = htmlText;
+            chatLogContent.appendChild(chatLine);
+            chatLogContent.scrollTop = chatLogContent.scrollHeight;
+        }
+    }
+
+    const floatingLog = document.getElementById('floatingLog');
+    if (!floatingLog) return;
+    
+    const floatLine = document.createElement('div');
+    floatLine.className = `log-line log-type-${type}`;
+    floatLine.innerHTML = htmlText;
+    floatingLog.appendChild(floatLine);
+
+    const removeFloatLine = () => {
+        if(!floatLine.classList.contains('fade-out')) {
+            floatLine.classList.add('fade-out');
+            setTimeout(() => { if (floatLine.parentNode) floatLine.remove(); }, 500); 
+        }
+    };
+    // 5秒後に消える
+    floatLine.timerId = setTimeout(removeFloatLine, 5000);
+
+    // 5行制限
+    const activeLines = Array.from(floatingLog.children).filter(child => !child.classList.contains('fade-out'));
+    if (activeLines.length > 5) {
+        const oldest = activeLines[0];
+        clearTimeout(oldest.timerId); 
+        if(!oldest.classList.contains('fade-out')) {
+            oldest.classList.add('fade-out');
+            setTimeout(() => { if (oldest.parentNode) oldest.remove(); }, 500);
+        }
+    }
+};
 
 // Loader側から、HTML(DOM)の読み込みが完了した後に呼ばれる初期化関数
 window.initUI = function() {
@@ -19,7 +78,7 @@ window.initUI = function() {
     const invContent = document.getElementById('invContent');
     const goldAmountDisplay = document.getElementById('goldAmount'); 
 
-    // ★修正: ステータス画面のヘッダー上部固定と、不要な横スクロールの禁止
+    // ステータス画面のヘッダー上部固定と、不要な横スクロールの禁止
     const statHeader = document.querySelector('#statusWindow .stat-header');
     if (statHeader) {
         statHeader.style.position = 'sticky';
@@ -29,7 +88,7 @@ window.initUI = function() {
         statHeader.style.margin = '-15px -15px 10px -15px'; 
         statHeader.style.padding = '15px 15px 5px 15px'; 
         
-        // ★追加: 横揺れ（左右スクロール）を無効化
+        // 横揺れ（左右スクロール）を無効化
         const statusWindowObj = document.getElementById('statusWindow');
         if (statusWindowObj) {
             statusWindowObj.style.overflowX = 'hidden';
@@ -128,6 +187,152 @@ window.initUI = function() {
     window.getRemainingPoints = function() { 
         return window.player.statPoints - (window.tempStats.str + window.tempStats.int + window.tempStats.vit); 
     };
+
+    // ------------------------------------
+    // 左下統合UI（タブ開閉）の制御
+    // ------------------------------------
+    let isBottomUIOpen = false;
+    let currentBottomTab = null;
+
+    function toggleBottomTab(tabName) {
+        const container = document.getElementById('bottomUIContainer');
+        const floating = document.getElementById('floatingLog');
+        if (!container || !floating) return;
+        
+        if (isBottomUIOpen && currentBottomTab === tabName) {
+            isBottomUIOpen = false;
+            container.classList.remove('open');
+            currentBottomTab = null;
+            document.querySelectorAll('.bottom-tab-btn').forEach(b => b.classList.remove('active'));
+            floating.className = 'state-closed';
+            return;
+        }
+        
+        isBottomUIOpen = true;
+        currentBottomTab = tabName;
+        container.classList.add('open');
+        
+        document.querySelectorAll('.bottom-tab-btn').forEach(b => {
+            b.classList.toggle('active', b.dataset.target === tabName);
+        });
+        
+        document.querySelectorAll('.bottom-content').forEach(c => {
+            c.classList.toggle('active', c.id === `content-${tabName}`);
+        });
+        
+        floating.className = `state-${tabName}`;
+        
+        if (tabName === 'log') {
+            const lc = document.getElementById('fullLogContent');
+            if(lc) lc.scrollTop = lc.scrollHeight;
+        } else if (tabName === 'chat') {
+            const cc = document.getElementById('chatLogContent');
+            if(cc) cc.scrollTop = cc.scrollHeight;
+        }
+    }
+
+    document.querySelectorAll('.bottom-tab-btn').forEach(btn => {
+        btn.addEventListener('pointerdown', (e) => {
+            e.stopPropagation(); toggleBottomTab(btn.dataset.target);
+        });
+    });
+
+    const chatSendBtn = document.getElementById('chatSendBtn');
+    if (chatSendBtn) {
+        chatSendBtn.addEventListener('pointerdown', (e) => {
+            e.stopPropagation();
+            const input = document.getElementById('chatInput');
+            const text = input.value.trim();
+            if (text) {
+                window.addLog(`<span class='color-player'>プレイヤー:</span> ${text}`, 'chat');
+                input.value = '';
+            }
+        });
+    }
+
+    // ------------------------------------
+    // ショートカットカルーセルの制御
+    // ------------------------------------
+    window.scCurrentPage = 0;
+    window.isScDragging = false;
+    window.scStartX = 0;
+
+    const scViewport = document.getElementById('shortcutViewport');
+    const scTrack = document.getElementById('shortcutTrack');
+
+    if (scViewport && scTrack) {
+        scViewport.addEventListener('pointerdown', (e) => {
+            window.isScDragging = true;
+            window.scStartX = e.clientX;
+            scTrack.style.transition = 'none';
+            e.stopPropagation();
+        });
+
+        window.addEventListener('pointermove', (e) => {
+            if (!window.isScDragging) return;
+            const dx = e.clientX - window.scStartX;
+            scTrack.style.transform = `translateX(${dx}px)`;
+        });
+
+        window.addEventListener('pointerup', (e) => {
+            if (!window.isScDragging) return;
+            window.isScDragging = false;
+            const dx = e.clientX - window.scStartX;
+            const threshold = scViewport.clientWidth * 0.2; 
+            
+            scTrack.style.transition = 'transform 0.2s ease-out';
+            if (dx > threshold) {
+                scTrack.style.transform = `translateX(${scViewport.clientWidth}px)`;
+                window.scCurrentPage = (window.scCurrentPage - 1 + 10) % 10;
+                setTimeout(() => window.resetScTrack(), 200);
+            } else if (dx < -threshold) {
+                scTrack.style.transform = `translateX(${-scViewport.clientWidth}px)`;
+                window.scCurrentPage = (window.scCurrentPage + 1) % 10;
+                setTimeout(() => window.resetScTrack(), 200);
+            } else {
+                scTrack.style.transform = `translateX(0px)`;
+            }
+        });
+    }
+
+    window.resetScTrack = function() {
+        if (!scTrack) return;
+        scTrack.style.transition = 'none';
+        scTrack.style.transform = 'translateX(0px)';
+        window.renderShortcutPages();
+    };
+
+    window.renderShortcutPages = function() {
+        const prevPage = (window.scCurrentPage - 1 + 10) % 10;
+        const nextPage = (window.scCurrentPage + 1) % 10;
+        
+        const pagePrev = document.getElementById('shortcutPagePrev');
+        const pageCurr = document.getElementById('shortcutPageCurrent');
+        const pageNext = document.getElementById('shortcutPageNext');
+        
+        if (pagePrev) pagePrev.innerHTML = window.createSlotsForPage(prevPage);
+        if (pageCurr) pageCurr.innerHTML = window.createSlotsForPage(window.scCurrentPage);
+        if (pageNext) pageNext.innerHTML = window.createSlotsForPage(nextPage);
+        
+        const circles = ['①','②','③','④','⑤','⑥','⑦','⑧','⑨','⑩'];
+        let html = '';
+        for(let i=0; i<10; i++) {
+            html += `<span style="color: ${i === window.scCurrentPage ? '#fff' : '#555'}; margin: 0 1px;">${circles[i]}</span>`;
+        }
+        const pagination = document.getElementById('shortcutPagination');
+        if (pagination) pagination.innerHTML = html;
+    };
+
+    window.createSlotsForPage = function(pageIndex) {
+        let html = '';
+        for(let i=0; i<10; i++) {
+            html += `<div class="shortcut-slot"></div>`; 
+        }
+        return html;
+    };
+
+    window.renderShortcutPages();
+
 
     // ------------------------------------
     // インベントリUI制御関数の定義
@@ -249,9 +454,6 @@ window.initUI = function() {
         itemDetail.style.display = 'flex';
     };
 
-    // ------------------------------------
-    // ドロップ（置く）関連のUI動的生成・処理
-    // ------------------------------------
     function executeDrop(item, tabData, selectedIndex, dropCount) {
         if (item.isEquipped) { 
             item.isEquipped = false; window.player.equipped[item.equipSlot] = null; 
@@ -389,7 +591,6 @@ window.initUI = function() {
         window.tempStats = {str:0, int:0, vit:0};
     });
 
-
     // ------------------------------------
     // インベントリのイベントリスナー・ジェスチャー操作
     // ------------------------------------
@@ -435,7 +636,6 @@ window.initUI = function() {
     });
     invContent.addEventListener('pointercancel', () => { isContentSwiping = false; });
 
-    // アクションボタンとアイテム詳細のボタン
     document.getElementById('btnDetailClose').addEventListener('pointerdown', (e) => {
         e.stopPropagation(); itemDetail.style.display = 'none';
     });
