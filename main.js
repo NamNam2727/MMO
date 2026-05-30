@@ -13,6 +13,11 @@ function updateInputPos(e) {
     input.screenY = e.clientY - rect.top;
 }
 
+// ★追加: 画面全体でのコンテキストメニュー（右クリック・長押しメニュー）を禁止
+window.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+});
+
 // --- 入力イベント (タップ/長押し) ---
 window.addEventListener('pointerdown', (e) => {
     const itemDetail = document.getElementById('itemDetail');
@@ -32,7 +37,6 @@ window.addEventListener('pointerdown', (e) => {
         e.target.tagName === 'SELECT' || 
         e.target.tagName === 'INPUT') return;
     
-    // ★ここでプレイヤーが自ら画面をタップした時のみ自動攻撃を解除
     input.isDown = true; updateInputPos(e); pointerDownTime = performance.now();
     window.playerPath = []; window.player.isAutoAttacking = false; window.player.targetItem = null; 
 });
@@ -134,7 +138,6 @@ function update(dt, timestamp) {
     
     if (pIsFrozen) {
         shouldMove = false; 
-        // ★修正: 凍結しても自動攻撃フラグは落とさない（解除後に再開させるため）
     }
 
     // 攻撃処理
