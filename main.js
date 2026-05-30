@@ -27,22 +27,23 @@ window.addEventListener('pointerdown', (e) => {
         (itemDetail && e.target.closest('#itemDetail')) || 
         (statWindow && e.target.closest('#statusWindow')) || 
         e.target.closest('#playerWidget') || 
-        e.target.closest('#bottomUIContainer') || // ★追加: 左下スライドUI操作時の移動貫通防止
+        e.target.closest('#bottomUIContainer') || 
         e.target.tagName === 'BUTTON' || 
         e.target.tagName === 'SELECT' || 
         e.target.tagName === 'INPUT') return;
     
+    // ★ここでプレイヤーが自ら画面をタップした時のみ自動攻撃を解除
     input.isDown = true; updateInputPos(e); pointerDownTime = performance.now();
     window.playerPath = []; window.player.isAutoAttacking = false; window.player.targetItem = null; 
 });
 
 window.addEventListener('pointermove', (e) => { 
-    if (window.isScDragging) return; // ★追加: カルーセルスワイプ中は移動処理させない
+    if (window.isScDragging) return; 
     if (input.isDown) updateInputPos(e); 
 });
 
 function handlePointerUp(e) {
-    if (window.isScDragging) return; // ★追加: カルーセルスワイプ終了時は移動させない
+    if (window.isScDragging) return; 
     if (input.isDown) {
         const currentTime = performance.now();
         if (currentTime - pointerDownTime < 200) {
@@ -133,7 +134,7 @@ function update(dt, timestamp) {
     
     if (pIsFrozen) {
         shouldMove = false; 
-        window.player.isAutoAttacking = false; 
+        // ★修正: 凍結しても自動攻撃フラグは落とさない（解除後に再開させるため）
     }
 
     // 攻撃処理
@@ -148,7 +149,7 @@ function update(dt, timestamp) {
                 window.player.targetEnemy.hateTable[window.player.id] = (window.player.targetEnemy.hateTable[window.player.id] || 0) + window.player.atk;
                 window.player.targetEnemy.damageTable[window.player.id] = (window.player.targetEnemy.damageTable[window.player.id] || 0) + actualDamage;
                 
-                // ★追加: 与ダメージログの出力
+                // 与ダメージログの出力
                 if (typeof window.addLog === 'function' && typeof window.getEntityName === 'function') {
                     window.addLog(`${window.getEntityName(window.player)} は ${window.getEntityName(window.player.targetEnemy)} に <span class='color-damage'>${Math.floor(actualDamage)}</span> ダメージを与えた！`, 'damage');
                 }
@@ -185,7 +186,6 @@ function update(dt, timestamp) {
                     const added = window.addItemToInventory(item);
                     if (added) {
                         window.droppedItems.splice(itemIndex, 1);
-                        // ★追加: アイテム取得ログの出力
                         if (typeof window.addLog === 'function') {
                             window.addLog(`<span class='color-item'>${item.name}</span> を獲得した！`, 'item');
                         }
@@ -433,7 +433,7 @@ window.gameLoop = function(timestamp) {
     requestAnimationFrame(window.gameLoop);
 };
 
-// ★追加: 初期化時の実行処理
+// 初期化時の実行処理
 if (typeof window.addLog === 'function') {
     window.addLog("<span class='color-sys'>システム: システムを起動しました。</span>", 'sys'); 
 }
