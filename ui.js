@@ -26,8 +26,8 @@ window.addLog = function(htmlText, type = 'sys') {
     fullLogContent.appendChild(fullLine);
     fullLogContent.scrollTop = fullLogContent.scrollHeight; 
 
-    // チャットタブには「チャット」と「システム」のログを流す
-    if (type === 'chat' || type === 'sys') {
+    // ★修正: チャットタブには「チャット」のログのみを流す
+    if (type === 'chat') {
         const chatLogContent = document.getElementById('chatLogContent');
         if (chatLogContent) {
             const chatLine = document.createElement('div');
