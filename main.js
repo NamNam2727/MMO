@@ -13,7 +13,7 @@ function updateInputPos(e) {
     input.screenY = e.clientY - rect.top;
 }
 
-// ★追加: 画面全体でのコンテキストメニュー（右クリック・長押しメニュー）を禁止
+// 画面全体でのコンテキストメニュー（右クリック・長押しメニュー）を禁止
 window.addEventListener('contextmenu', (e) => {
     e.preventDefault();
 });
@@ -189,9 +189,16 @@ function update(dt, timestamp) {
                     const added = window.addItemToInventory(item);
                     if (added) {
                         window.droppedItems.splice(itemIndex, 1);
+                        
+                        // ★修正: アイテム取得ログの個数表示の分岐
                         if (typeof window.addLog === 'function') {
-                            window.addLog(`<span class='color-item'>${item.name}</span> を獲得した！`, 'item');
+                            let itemNameDisplay = item.name;
+                            if (item.maxStack > 1) {
+                                itemNameDisplay += ` x ${item.count}`;
+                            }
+                            window.addLog(`<span class='color-item'>${itemNameDisplay}</span> を獲得した！`, 'item');
                         }
+                        
                         const invWindow = document.getElementById('invWindow');
                         if (invWindow && invWindow.style.display === 'flex' && typeof window.renderInventory === 'function') {
                             window.renderInventory();
