@@ -1,7 +1,7 @@
 // =========================================================
 // ui.js
-// ステータス画面、統合ログ、ショートカット枠などの基本UI制御
-// (インベントリ関連は inventory.js に分離済み)
+// ステータス画面、統合ログなどの基本UI制御
+// (インベントリ・ショートカット関連は inventory.js に分離済み)
 // =========================================================
 
 window.tempStats = { str: 0, int: 0, vit: 0 }; // 仮振り用のステータス保持
@@ -243,89 +243,6 @@ window.initUI = function() {
     }
 
     // ------------------------------------
-    // ショートカットカルーセルの制御
-    // ------------------------------------
-    window.scCurrentPage = 0;
-    window.isScDragging = false;
-    window.scStartX = 0;
-
-    const scViewport = document.getElementById('shortcutViewport');
-    const scTrack = document.getElementById('shortcutTrack');
-
-    if (scViewport && scTrack) {
-        scViewport.addEventListener('pointerdown', (e) => {
-            window.isScDragging = true;
-            window.scStartX = e.clientX;
-            scTrack.style.transition = 'none';
-            e.stopPropagation();
-        });
-
-        window.addEventListener('pointermove', (e) => {
-            if (!window.isScDragging) return;
-            const dx = e.clientX - window.scStartX;
-            scTrack.style.transform = `translateX(${dx}px)`;
-        });
-
-        window.addEventListener('pointerup', (e) => {
-            if (!window.isScDragging) return;
-            window.isScDragging = false;
-            const dx = e.clientX - window.scStartX;
-            const threshold = scViewport.clientWidth * 0.2; 
-            
-            scTrack.style.transition = 'transform 0.2s ease-out';
-            if (dx > threshold) {
-                scTrack.style.transform = `translateX(${scViewport.clientWidth}px)`;
-                window.scCurrentPage = (window.scCurrentPage - 1 + 10) % 10;
-                setTimeout(() => window.resetScTrack(), 200);
-            } else if (dx < -threshold) {
-                scTrack.style.transform = `translateX(${-scViewport.clientWidth}px)`;
-                window.scCurrentPage = (window.scCurrentPage + 1) % 10;
-                setTimeout(() => window.resetScTrack(), 200);
-            } else {
-                scTrack.style.transform = `translateX(0px)`;
-            }
-        });
-    }
-
-    window.resetScTrack = function() {
-        if (!scTrack) return;
-        scTrack.style.transition = 'none';
-        scTrack.style.transform = 'translateX(0px)';
-        window.renderShortcutPages();
-    };
-
-    window.renderShortcutPages = function() {
-        const prevPage = (window.scCurrentPage - 1 + 10) % 10;
-        const nextPage = (window.scCurrentPage + 1) % 10;
-        
-        const pagePrev = document.getElementById('shortcutPagePrev');
-        const pageCurr = document.getElementById('shortcutPageCurrent');
-        const pageNext = document.getElementById('shortcutPageNext');
-        
-        if (pagePrev) pagePrev.innerHTML = window.createSlotsForPage(prevPage);
-        if (pageCurr) pageCurr.innerHTML = window.createSlotsForPage(window.scCurrentPage);
-        if (pageNext) pageNext.innerHTML = window.createSlotsForPage(nextPage);
-        
-        const circles = ['①','②','③','④','⑤','⑥','⑦','⑧','⑨','⑩'];
-        let html = '';
-        for(let i=0; i<10; i++) {
-            html += `<span style="color: ${i === window.scCurrentPage ? '#fff' : '#555'}; margin: 0 1px;">${circles[i]}</span>`;
-        }
-        const pagination = document.getElementById('shortcutPagination');
-        if (pagination) pagination.innerHTML = html;
-    };
-
-    window.createSlotsForPage = function(pageIndex) {
-        let html = '';
-        for(let i=0; i<10; i++) {
-            html += `<div class="shortcut-slot"></div>`; 
-        }
-        return html;
-    };
-
-    window.renderShortcutPages();
-
-    // ------------------------------------
     // ステータス画面のイベントリスナー
     // ------------------------------------
     document.getElementById('btnAddStr').addEventListener('pointerdown', (e) => { e.stopPropagation(); if(window.getRemainingPoints() > 0){ window.tempStats.str++; window.updateStatusUI(); } });
@@ -403,7 +320,7 @@ window.initUI = function() {
         }
     });
 
-    // インベントリUIの初期化を分離した外部JS(inventory.js)から呼び出す
+    // インベントリ/ショートカットのUI初期化を呼び出す
     if(typeof window.initInventoryUI === 'function') {
         window.initInventoryUI();
     }
