@@ -6,13 +6,14 @@
 (function() {
     const baseURL = 'https://namnam2727.github.io/MMO/';
     
-    // ★修正: 依存関係を考慮した6つのファイルの読み込み順序
+    // 依存関係を考慮した7つのファイルの読み込み順序
     const scriptsToLoad = [
         'config.js',
-        'itemDB.js',    // ★追加: マスターデータ
+        'itemDB.js',
         'utils.js',
         'entities.js',
-        'ui.js',        // ★追加: UI制御
+        'inventory.js', // ★追加: インベントリとD&D制御
+        'ui.js',        // 軽量化されたUI制御
         'main.js'
     ];
 
@@ -54,7 +55,7 @@
             return;
         }
 
-        // ★追加: UIボタンのイベントリスナー登録等を実行
+        // UIボタンのイベントリスナー登録等を実行
         if (typeof window.initUI === 'function') {
             window.initUI();
         }
