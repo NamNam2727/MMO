@@ -1,6 +1,6 @@
 // =========================================================
 // inventory.js
-// インベントリの描画、操作、ドラッグ＆ドロップ(D&D)制御
+// インベントリの描画、操作、ドラッグ＆ドロップ(D&D)制御、アイテムCT管理
 // =========================================================
 
 window.tabsList = ['equip', 'consume', 'skill', 'etc', 'important'];
@@ -17,12 +17,47 @@ window.lastDragY = 0;
 window.lpTimer = null;
 window.justDropped = false;
 
+// アイテムCT グローバル状態
+window.itemCooldowns = {};
+
 window.initInventoryUI = function() {
     window.invWindow = document.getElementById('invWindow');
     const invTitleBar = document.getElementById('invTitleBar');
     const invTabs = document.getElementById('invTabs');
     const invContent = document.getElementById('invContent');
     const itemDetail = document.getElementById('itemDetail');
+
+    // --- CT減算とDOM更新ループの起動 ---
+    let lastTimeCT = performance.now();
+    function updateCT() {
+        let now = performance.now();
+        let dt = (now - lastTimeCT) / 1000;
+        lastTimeCT = now;
+        
+        for (let id in window.itemCooldowns) {
+            if (window.itemCooldowns[id] > 0) {
+                window.itemCooldowns[id] -= dt;
+                if (window.itemCooldowns[id] <= 0) {
+                    delete window.itemCooldowns[id];
+                }
+            }
+        }
+        
+        // DOM(アイコン上の暗転レイヤー)の高さを更新
+        const overlays = document.querySelectorAll('.ct-overlay');
+        overlays.forEach(overlay => {
+            const id = overlay.getAttribute('data-ct-id');
+            if (window.itemCooldowns && window.itemCooldowns[id] > 0) {
+                const ratio = window.itemCooldowns[id] / 3.0; 
+                overlay.style.height = `${ratio * 100}%`; // bottom:0 基準で上から下へワイプ
+            } else {
+                overlay.style.height = `0%`;
+            }
+        });
+
+        requestAnimationFrame(updateCT);
+    }
+    requestAnimationFrame(updateCT);
 
     // ゴーストアイコンの生成
     let ghost = document.getElementById('invDragGhost');
@@ -79,11 +114,12 @@ window.initInventoryUI = function() {
     });
     invContent.addEventListener('pointercancel', () => { isContentSwiping = false; });
 
-    // 詳細画面ボタン
+    // 詳細画面閉じるボタン
     document.getElementById('btnDetailClose').addEventListener('pointerdown', (e) => {
         e.stopPropagation(); itemDetail.style.display = 'none';
     });
 
+    // --- 使用/装備ボタン（CT判定追加版） ---
     document.getElementById('btnUseEquip').addEventListener('pointerdown', (e) => {
         e.stopPropagation();
         const currentTabName = window.tabsList[window.currentTabIndex];
@@ -92,8 +128,18 @@ window.initInventoryUI = function() {
         if (!item) return;
 
         if (item.type === 'consume') {
+            // CT中なら使用を弾く
+            if (window.itemCooldowns && window.itemCooldowns[item.id] > 0) {
+                if (typeof window.addLog === 'function') window.addLog(`<span class='color-sys'>まだ使用できません。</span>`, 'sys');
+                return;
+            }
+
             if (item.restore) window.player.hp = Math.min(window.player.maxHp, window.player.hp + item.restore);
             if(typeof window.updateWidgetUI === 'function') window.updateWidgetUI();
+            
+            // 3秒のクールタイムを開始
+            window.itemCooldowns[item.id] = 3.0;
+
             item.count--;
             if (item.count <= 0) { tabData.items.splice(window.selectedItemIndex, 1); window.selectedItemIndex = -1; }
         } else if (item.type === 'equip') {
@@ -108,6 +154,7 @@ window.initInventoryUI = function() {
         itemDetail.style.display = 'none'; window.renderInventory();
     });
 
+    // 置くボタン
     document.getElementById('btnDrop').addEventListener('pointerdown', (e) => {
         e.stopPropagation();
         const currentTabName = window.tabsList[window.currentTabIndex];
@@ -122,7 +169,7 @@ window.initInventoryUI = function() {
         }
     });
 
-    // グローバル D&Dイベント
+    // --- グローバル D&Dイベント ---
     if (!window.__dndEventsRegistered) {
         window.__dndEventsRegistered = true;
         
@@ -219,7 +266,14 @@ window.renderInventory = function() {
             const item = tabData.items[i];
             slot.classList.add(`rarity-${item.rarity}`);
             const rarityColor = window.RARITY && window.RARITY[item.rarity] ? window.RARITY[item.rarity].color : '#fff';
-            slot.innerHTML = `<div class="item-icon" style="background-color: ${item.color}; border: 2px solid ${rarityColor}; box-sizing: border-box;"></div>`;
+            
+            let ctOverlay = '';
+            if (item.type === 'consume') {
+                ctOverlay = `<div class="ct-overlay" data-ct-id="${item.id}" style="position: absolute; bottom: 0; left: 0; width: 100%; background: rgba(0,0,0,0.7); height: 0%;"></div>`;
+            }
+
+            slot.innerHTML = `<div class="item-icon" style="background-color: ${item.color}; border: 2px solid ${rarityColor}; box-sizing: border-box; position: relative; overflow: hidden; border-radius: 50%;">${ctOverlay}</div>`;
+            
             if (item.maxStack > 1) slot.innerHTML += `<div class="item-count">${item.count}</div>`;
             if (item.isEquipped) slot.innerHTML += `<div class="item-equip-mark">E</div>`;
             
@@ -227,10 +281,8 @@ window.renderInventory = function() {
                 e.stopPropagation(); 
                 if (window.isDraggingItem || window.justDropped) return;
                 
-                window.lpStartX = e.clientX; 
-                window.lpStartY = e.clientY; 
-                window.lastDragX = e.clientX;
-                window.lastDragY = e.clientY;
+                window.lpStartX = e.clientX; window.lpStartY = e.clientY; 
+                window.lastDragX = e.clientX; window.lastDragY = e.clientY;
 
                 if (invContent) invContent.style.overflowY = 'hidden';
 
@@ -244,8 +296,7 @@ window.renderInventory = function() {
                 if (window.isDraggingItem) return; 
                 if (window.lpTimer) {
                     if (Math.abs(e.clientX - window.lpStartX) > 10 || Math.abs(e.clientY - window.lpStartY) > 10) {
-                        clearTimeout(window.lpTimer);
-                        window.lpTimer = null;
+                        clearTimeout(window.lpTimer); window.lpTimer = null;
                         if (invContent) invContent.style.overflowY = 'auto';
                     }
                 }
@@ -257,8 +308,7 @@ window.renderInventory = function() {
                 if (window.isDraggingItem || window.justDropped) return;
                 
                 if (window.lpTimer) {
-                    clearTimeout(window.lpTimer);
-                    window.lpTimer = null;
+                    clearTimeout(window.lpTimer); window.lpTimer = null;
                     if (Math.abs(e.clientX - window.lpStartX) < 10 && Math.abs(e.clientY - window.lpStartY) < 10) {
                         window.showItemDetail(item, i);
                     }
