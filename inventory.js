@@ -36,14 +36,12 @@ window.initInventoryUI = function() {
     const invContent = document.getElementById('invContent');
     const itemDetail = document.getElementById('itemDetail');
 
-    // SC枠データの初期化
-    if (!window.player) return; // プレイヤー生成待ち
+    if (!window.player) return; 
     if (!window.player.shortcuts) window.player.shortcuts = Array(30).fill(null);
 
-    // UIDの保証
     window.ensureUIDs();
 
-    // --- CT減算とDOM更新ループの起動 ---
+    // --- CT減算とDOM更新ループ ---
     let lastTimeCT = performance.now();
     function updateCT() {
         let now = performance.now();
@@ -59,13 +57,12 @@ window.initInventoryUI = function() {
             }
         }
         
-        // インベントリとショートカット両方の暗転レイヤーを更新
         const allOverlays = document.querySelectorAll('.ct-overlay, .ct-overlay-sc');
         allOverlays.forEach(overlay => {
             const id = overlay.getAttribute('data-ct-id');
             if (window.itemCooldowns && window.itemCooldowns[id] > 0) {
                 const ratio = window.itemCooldowns[id] / 3.0; 
-                overlay.style.height = `${ratio * 100}%`; // bottom:0 基準で上から下へワイプ
+                overlay.style.height = `${ratio * 100}%`; 
             } else {
                 overlay.style.height = `0%`;
             }
@@ -151,7 +148,6 @@ window.initInventoryUI = function() {
                 if (typeof window.addLog === 'function') window.addLog(`<span class='color-sys'>まだ使用できません。</span>`, 'sys');
                 return;
             }
-
             if (item.restore) window.player.hp = Math.min(window.player.maxHp, window.player.hp + item.restore);
             if(typeof window.updateWidgetUI === 'function') window.updateWidgetUI();
             
@@ -185,16 +181,9 @@ window.initInventoryUI = function() {
         }
     });
 
-    // --- ショートカット スワイプ処理 (ui.jsの古い処理を沈黙させる) ---
-    const oldViewport = document.getElementById('shortcutViewport');
-    if (oldViewport) {
-        const newViewport = oldViewport.cloneNode(true);
-        oldViewport.parentNode.replaceChild(newViewport, oldViewport);
-    }
-    
+    // --- ショートカット スワイプ処理 ---
     const scViewport = document.getElementById('shortcutViewport');
     const scTrack = document.getElementById('shortcutTrack');
-    
     let scPointerDown = false;
     let scSwipeStartX = 0;
     let scSwipeStartY = 0;
@@ -260,7 +249,6 @@ window.initInventoryUI = function() {
     if (!window.__dndEventsRegistered) {
         window.__dndEventsRegistered = true;
         
-        // インベントリ用ゴースト移動
         const updateInvGhostPos = (x, y) => {
             window.lastDragX = x; window.lastDragY = y;
             const gh = document.getElementById('invDragGhost');
@@ -268,7 +256,6 @@ window.initInventoryUI = function() {
             window.checkAutoScroll(y);
         };
 
-        // ショートカット用ゴースト移動
         const updateScGhostPos = (x, y) => {
             window.scLastX = x; window.scLastY = y;
             const sgh = document.getElementById('scDragGhost');
@@ -287,7 +274,6 @@ window.initInventoryUI = function() {
             }
         }, { passive: false });
 
-        // インベントリから離した時
         const handleInvDropEnd = (e) => {
             if (window.lpTimer) { clearTimeout(window.lpTimer); window.lpTimer = null; }
             if (!window.isDraggingItem) return;
@@ -342,7 +328,6 @@ window.initInventoryUI = function() {
             }, 10);
         };
 
-        // ショートカット枠から離した時
         const handleScDropEnd = (e) => {
             if (!window.isScSlotDragging) return;
             window.isScSlotDragging = false;
@@ -380,7 +365,6 @@ window.initInventoryUI = function() {
         window.addEventListener('touchend', (e) => { handleInvDropEnd(e); handleScDropEnd(e); });
     }
 
-    // 初期描画
     if (window.renderShortcutPages) window.renderShortcutPages();
 };
 
@@ -393,234 +377,75 @@ window.ensureUIDs = function() {
     }
 };
 
-window.registerShortcut = function(scIdx, item) {
-    if (!window.player.shortcuts) window.player.shortcuts = Array(30).fill(null);
-    window.player.shortcuts[scIdx] = {
-        id: item.id, uid: item.uid, type: item.type, color: item.color,
-        rarity: item.rarity, isStackable: item.maxStack > 1, equipSlot: item.equipSlot
-    };
-    window.renderShortcutPages();
-};
-
-window.renderShortcutPages = function() {
-    if (!window.player || !window.player.shortcuts) return;
-    const prevPage = (window.scCurrentPage - 1 + 10) % 10;
-    const nextPage = (window.scCurrentPage + 1) % 10;
+// =========================================================
+// ★ アイテムスタックの自動整列 (圧縮) 処理
+// =========================================================
+window.compressStacks = function() {
+    if (!window.player || !window.player.inventory) return;
     
-    const pagePrev = document.getElementById('shortcutPagePrev');
-    const pageCurr = document.getElementById('shortcutPageCurrent');
-    const pageNext = document.getElementById('shortcutPageNext');
-    
-    if (pagePrev) window.populateShortcutPage(pagePrev, prevPage);
-    if (pageCurr) window.populateShortcutPage(pageCurr, window.scCurrentPage);
-    if (pageNext) window.populateShortcutPage(pageNext, nextPage);
-    
-    const circles = ['①','②','③','④','⑤','⑥','⑦','⑧','⑨','⑩'];
-    let html = '';
-    for(let i=0; i<10; i++) {
-        html += `<span style="color: ${i === window.scCurrentPage ? '#fff' : '#555'}; margin: 0 1px;">${circles[i]}</span>`;
-    }
-    const pagination = document.getElementById('shortcutPagination');
-    if (pagination) pagination.innerHTML = html;
-};
-
-window.populateShortcutPage = function(container, pageIndex) {
-    container.innerHTML = '';
-    window.ensureUIDs(); 
-    
-    for(let i=0; i<10; i++) {
-        const globalIdx = pageIndex * 10 + i;
-        const scData = window.player.shortcuts[globalIdx];
-        
-        const slot = document.createElement('div');
-        slot.className = 'shortcut-slot';
-        slot.dataset.scIdx = globalIdx;
-        slot.style.position = 'relative';
-
-        if (scData) {
-            let actualItem = null; let totalCount = 0; let isEquipped = false;
-
-            for (const tab in window.player.inventory) {
-                const items = window.player.inventory[tab].items;
-                for (const item of items) {
-                    if (scData.isStackable) {
-                        if (item.id === scData.id) { actualItem = item; totalCount += item.count; }
-                    } else {
-                        if (item.uid === scData.uid) { actualItem = item; isEquipped = item.isEquipped; totalCount = 1; }
-                    }
-                }
-            }
-
-            if (!actualItem && !scData.isStackable) {
-                window.player.shortcuts[globalIdx] = null;
-            } else {
-                const rarityColor = window.RARITY && window.RARITY[scData.rarity] ? window.RARITY[scData.rarity].color : '#fff';
-                let ctOverlay = '';
-                if (scData.type === 'consume') {
-                    ctOverlay = `<div class="ct-overlay-sc" data-ct-id="${scData.id}" style="position: absolute; bottom: 0; left: 0; width: 100%; background: rgba(0,0,0,0.7); height: 0%;"></div>`;
-                }
-                
-                slot.innerHTML = `
-                    <div class="item-icon" style="background-color: ${scData.color}; border: 2px solid ${rarityColor}; box-sizing: border-box; position: relative; overflow: hidden; border-radius: 50%; width: 70%; height: 70%; margin: 15% auto;">
-                        ${ctOverlay}
-                    </div>
-                `;
-                
-                if (scData.isStackable) {
-                    slot.innerHTML += `<div class="item-count" style="position:absolute; bottom:1px; right:2px; color:white; font-size:9px; text-shadow:1px 1px 1px black;">${totalCount}</div>`;
-                }
-                if (isEquipped) {
-                    slot.innerHTML += `<div class="item-equip-mark" style="position:absolute; bottom:1px; right:2px; color:#ff0; font-size:10px; font-weight:bold; text-shadow:1px 1px 1px black;">E</div>`;
-                }
-            }
-        }
-
-        window.setupShortcutSlotEvents(slot, globalIdx, window.player.shortcuts[globalIdx]);
-        container.appendChild(slot);
-    }
-};
-
-window.setupShortcutSlotEvents = function(slot, globalIdx, scData) {
-    let lpStartX, lpStartY, lpTimer;
-    
-    slot.addEventListener('pointerdown', (e) => {
-        if (window.isScSlotDragging || window.justDroppedSc) return;
-        lpStartX = e.clientX;
-        lpStartY = e.clientY;
-        if (scData) {
-            lpTimer = setTimeout(() => {
-                lpTimer = null;
-                if (!window.scSwipeActive) { 
-                    window.startShortcutDrag(scData, globalIdx, e);
-                }
-            }, 300);
-        }
-    });
-
-    slot.addEventListener('pointermove', (e) => {
-        if (window.isScSlotDragging) return;
-        if (lpTimer) {
-            if (Math.abs(e.clientX - lpStartX) > 10 || Math.abs(e.clientY - lpStartY) > 10) {
-                clearTimeout(lpTimer);
-                lpTimer = null;
-            }
-        }
-    });
-
-    slot.addEventListener('pointerup', (e) => {
-        if (window.isScSlotDragging || window.justDroppedSc || window.scSwipeActive) return; 
-        
-        if (lpTimer) {
-            clearTimeout(lpTimer);
-            lpTimer = null;
-            if (Math.abs(e.clientX - lpStartX) < 10 && Math.abs(e.clientY - lpStartY) < 10) {
-                window.handleShortcutTap(scData, globalIdx);
-            }
-        } else if (!scData) {
-            if (Math.abs(e.clientX - lpStartX) < 10 && Math.abs(e.clientY - lpStartY) < 10) {
-                window.handleShortcutTap(null, globalIdx);
-            }
-        }
-    });
-
-    slot.addEventListener('pointercancel', () => {
-        if (lpTimer) { clearTimeout(lpTimer); lpTimer = null; }
-    });
-    slot.addEventListener('pointerleave', (e) => {
-        if (lpTimer && (Math.abs(e.clientX - lpStartX) > 10 || Math.abs(e.clientY - lpStartY) > 10)) { 
-            clearTimeout(lpTimer); lpTimer = null; 
-        }
-    });
-};
-
-window.handleShortcutTap = function(scData, globalIdx) {
-    if (!scData) {
-        if (typeof window.addLog === 'function') window.addLog("<span class='color-sys'>インベントリにあるアイテムを長押し後、ドラッグ＆ドロップで登録できます。</span>", 'sys');
-        return;
-    }
-
-    window.ensureUIDs(); 
-
-    let actualItem = null; let actualTab = null; let actualIdx = -1;
-
     for (const tab in window.player.inventory) {
         const items = window.player.inventory[tab].items;
+        if (!items) continue;
+        
+        // 種類(ID)ごとにスタック可能なアイテムをまとめる
+        const itemsById = {};
         for (let i = 0; i < items.length; i++) {
             const item = items[i];
-            if (scData.isStackable && item.id === scData.id) {
-                actualItem = item; actualTab = tab; actualIdx = i; break; 
-            } else if (!scData.isStackable && item.uid === scData.uid) {
-                actualItem = item; actualTab = tab; actualIdx = i; break;
+            if (item.maxStack > 1) {
+                if (!itemsById[item.id]) itemsById[item.id] = [];
+                itemsById[item.id].push(item);
             }
         }
-        if (actualItem) break;
-    }
-
-    if (!actualItem) {
-        if (scData.isStackable) {
-            if (typeof window.addLog === 'function') window.addLog("<span class='color-sys'>アイテムを所持していません。</span>", 'sys');
-        }
-        return;
-    }
-
-    if (scData.type === 'consume') {
-        if (window.itemCooldowns && window.itemCooldowns[actualItem.id] > 0) {
-            if (typeof window.addLog === 'function') window.addLog(`<span class='color-sys'>まだ使用できません。</span>`, 'sys');
-            return;
-        }
-
-        if (actualItem.restore) window.player.hp = Math.min(window.player.maxHp, window.player.hp + actualItem.restore);
-        if (typeof window.updateWidgetUI === 'function') window.updateWidgetUI();
         
-        window.itemCooldowns[actualItem.id] = 3.0;
-
-        actualItem.count--;
-        if (actualItem.count <= 0) {
-            window.player.inventory[actualTab].items.splice(actualIdx, 1);
+        // 各IDごとに最大数まで詰める
+        for (const id in itemsById) {
+            const group = itemsById[id];
+            if (group.length === 0) continue;
+            
+            let totalCount = 0;
+            group.forEach(item => totalCount += item.count);
+            const max = group[0].maxStack;
+            
+            // 既存の枠を左から順にMAXまで補充
+            for (let i = 0; i < group.length; i++) {
+                if (totalCount >= max) {
+                    group[i].count = max;
+                    totalCount -= max;
+                } else {
+                    group[i].count = totalCount;
+                    totalCount = 0;
+                }
+            }
+            
+            // 既存の枠をすべて埋めても余りがある場合は、新しい枠を生成して追加
+            while (totalCount > 0) {
+                const newItem = Object.assign({}, group[0]);
+                newItem.uid = 'uid_' + Date.now() + '_' + Math.floor(Math.random() * 1000000);
+                if (totalCount >= max) {
+                    newItem.count = max;
+                    totalCount -= max;
+                } else {
+                    newItem.count = totalCount;
+                    totalCount = 0;
+                }
+                items.push(newItem);
+            }
+            
+            // カウントが0以下になった抜け殻枠を削除
+            for (let i = items.length - 1; i >= 0; i--) {
+                const item = items[i];
+                if (item.maxStack > 1 && item.id === id && item.count <= 0) {
+                    items.splice(i, 1);
+                }
+            }
         }
-        if (typeof window.renderInventory === 'function') window.renderInventory();
-        
-    } else if (scData.type === 'equip') {
-        if (actualItem.isEquipped) {
-            actualItem.isEquipped = false;
-            window.player.equipped[actualItem.equipSlot] = null;
-        } else {
-            window.player.inventory[actualTab].items.forEach(i => {
-                if (i.equipSlot === actualItem.equipSlot) i.isEquipped = false;
-            });
-            actualItem.isEquipped = true;
-            window.player.equipped[actualItem.equipSlot] = actualItem;
-        }
-        if(typeof window.updatePlayerStats === 'function') window.updatePlayerStats(); 
-        if (typeof window.renderInventory === 'function') window.renderInventory();
-        
-    } else if (scData.type === 'skill') {
-        if (typeof window.addLog === 'function') window.addLog(`<span class='color-sys'>スキルの使用を試みました。(スキルシステム未実装)</span>`, 'sys');
     }
-};
-
-window.startShortcutDrag = function(scData, globalIdx, e) {
-    window.isScSlotDragging = true;
-    window.scDragState = { active: true, data: scData, sourceIdx: globalIdx };
-    document.body.style.touchAction = 'none';
-
-    let scDragGhost = document.getElementById('scDragGhost');
-    if (!scDragGhost) {
-        scDragGhost = document.createElement('div');
-        scDragGhost.id = 'scDragGhost';
-        scDragGhost.style.cssText = 'position: fixed; pointer-events: none; display: none; z-index: 1000; width: 44px; height: 44px; justify-content: center; align-items: center; opacity: 0.8; transform: translate(-50%, -50%);';
-        document.body.appendChild(scDragGhost);
-    }
-    
-    const rarityColor = window.RARITY && window.RARITY[scData.rarity] ? window.RARITY[scData.rarity].color : '#fff';
-    scDragGhost.innerHTML = `<div style="width: 70%; height: 70%; border-radius: 50%; background-color: ${scData.color}; border: 2px solid ${rarityColor}; box-sizing: border-box;"></div>`;
-    
-    window.scLastX = e.clientX; window.scLastY = e.clientY;
-    scDragGhost.style.left = window.scLastX + 'px'; scDragGhost.style.top = window.scLastY + 'px';
-    scDragGhost.style.display = 'flex';
 };
 
 window.renderInventory = function() {
+    // 描画される直前に、常にスタックの自動整列（圧縮）を実行する
+    window.compressStacks();
+
     const invGrid = document.getElementById('invGrid');
     const goldAmountDisplay = document.getElementById('goldAmount');
     const invContent = document.getElementById('invContent');
@@ -712,9 +537,7 @@ window.renderInventory = function() {
     invGrid.appendChild(expandBtn);
 
     if(typeof window.updateTabIndicator === 'function') window.updateTabIndicator();
-    
-    // インベントリの更新に合わせてショートカットも更新
-    if (typeof window.renderShortcutPages === 'function') window.renderShortcutPages();
+    if(typeof window.renderShortcutPages === 'function') window.renderShortcutPages();
 };
 
 window.startInventoryDrag = function(item, idx, tabName, rarityColor) {
@@ -1002,4 +825,231 @@ window.stopAutoScroll = function() {
         clearInterval(window.scrollInterval);
         window.scrollInterval = null;
     }
+};
+
+window.registerShortcut = function(scIdx, item) {
+    if (!window.player.shortcuts) window.player.shortcuts = Array(30).fill(null);
+    window.player.shortcuts[scIdx] = {
+        id: item.id, uid: item.uid, type: item.type, color: item.color,
+        rarity: item.rarity, isStackable: item.maxStack > 1, equipSlot: item.equipSlot
+    };
+    window.renderShortcutPages();
+};
+
+window.renderShortcutPages = function() {
+    if (!window.player || !window.player.shortcuts) return;
+    const prevPage = (window.scCurrentPage - 1 + 10) % 10;
+    const nextPage = (window.scCurrentPage + 1) % 10;
+    
+    const pagePrev = document.getElementById('shortcutPagePrev');
+    const pageCurr = document.getElementById('shortcutPageCurrent');
+    const pageNext = document.getElementById('shortcutPageNext');
+    
+    if (pagePrev) window.populateShortcutPage(pagePrev, prevPage);
+    if (pageCurr) window.populateShortcutPage(pageCurr, window.scCurrentPage);
+    if (pageNext) window.populateShortcutPage(pageNext, nextPage);
+    
+    const circles = ['①','②','③','④','⑤','⑥','⑦','⑧','⑨','⑩'];
+    let html = '';
+    for(let i=0; i<10; i++) {
+        html += `<span style="color: ${i === window.scCurrentPage ? '#fff' : '#555'}; margin: 0 1px;">${circles[i]}</span>`;
+    }
+    const pagination = document.getElementById('shortcutPagination');
+    if (pagination) pagination.innerHTML = html;
+};
+
+window.populateShortcutPage = function(container, pageIndex) {
+    container.innerHTML = '';
+    window.ensureUIDs(); 
+    
+    for(let i=0; i<10; i++) {
+        const globalIdx = pageIndex * 10 + i;
+        const scData = window.player.shortcuts[globalIdx];
+        
+        const slot = document.createElement('div');
+        slot.className = 'shortcut-slot';
+        slot.dataset.scIdx = globalIdx;
+        slot.style.position = 'relative';
+
+        if (scData) {
+            let actualItem = null; let totalCount = 0; let isEquipped = false;
+
+            for (const tab in window.player.inventory) {
+                const items = window.player.inventory[tab].items;
+                for (const item of items) {
+                    if (scData.isStackable) {
+                        if (item.id === scData.id) { actualItem = item; totalCount += item.count; }
+                    } else {
+                        if (item.uid === scData.uid) { actualItem = item; isEquipped = item.isEquipped; totalCount = 1; }
+                    }
+                }
+            }
+
+            if (!actualItem && !scData.isStackable) {
+                window.player.shortcuts[globalIdx] = null;
+            } else {
+                const rarityColor = window.RARITY && window.RARITY[scData.rarity] ? window.RARITY[scData.rarity].color : '#fff';
+                let ctOverlay = '';
+                if (scData.type === 'consume') {
+                    ctOverlay = `<div class="ct-overlay-sc" data-ct-id="${scData.id}" style="position: absolute; bottom: 0; left: 0; width: 100%; background: rgba(0,0,0,0.7); height: 0%;"></div>`;
+                }
+                
+                slot.innerHTML = `
+                    <div class="item-icon" style="background-color: ${scData.color}; border: 2px solid ${rarityColor}; box-sizing: border-box; position: relative; overflow: hidden; border-radius: 50%; width: 70%; height: 70%; margin: 15% auto;">
+                        ${ctOverlay}
+                    </div>
+                `;
+                
+                if (scData.isStackable) {
+                    slot.innerHTML += `<div class="item-count" style="position:absolute; bottom:1px; right:2px; color:white; font-size:9px; text-shadow:1px 1px 1px black;">${totalCount}</div>`;
+                }
+                if (isEquipped) {
+                    slot.innerHTML += `<div class="item-equip-mark" style="position:absolute; bottom:1px; right:2px; color:#ff0; font-size:10px; font-weight:bold; text-shadow:1px 1px 1px black;">E</div>`;
+                }
+            }
+        }
+
+        window.setupShortcutSlotEvents(slot, globalIdx, window.player.shortcuts[globalIdx]);
+        container.appendChild(slot);
+    }
+};
+
+window.setupShortcutSlotEvents = function(slot, globalIdx, scData) {
+    let lpStartX, lpStartY, lpTimer;
+    
+    slot.addEventListener('pointerdown', (e) => {
+        if (window.isScSlotDragging || window.justDroppedSc) return;
+        lpStartX = e.clientX;
+        lpStartY = e.clientY;
+        if (scData) {
+            lpTimer = setTimeout(() => {
+                lpTimer = null;
+                if (!window.scSwipeActive) { 
+                    window.startShortcutDrag(scData, globalIdx, e);
+                }
+            }, 300);
+        }
+    });
+
+    slot.addEventListener('pointermove', (e) => {
+        if (window.isScSlotDragging) return;
+        if (lpTimer) {
+            if (Math.abs(e.clientX - lpStartX) > 10 || Math.abs(e.clientY - lpStartY) > 10) {
+                clearTimeout(lpTimer);
+                lpTimer = null;
+            }
+        }
+    });
+
+    slot.addEventListener('pointerup', (e) => {
+        if (window.isScSlotDragging || window.justDroppedSc || window.scSwipeActive) return; 
+        
+        if (lpTimer) {
+            clearTimeout(lpTimer);
+            lpTimer = null;
+            if (Math.abs(e.clientX - lpStartX) < 10 && Math.abs(e.clientY - lpStartY) < 10) {
+                window.handleShortcutTap(scData, globalIdx);
+            }
+        } else if (!scData) {
+            if (Math.abs(e.clientX - lpStartX) < 10 && Math.abs(e.clientY - lpStartY) < 10) {
+                window.handleShortcutTap(null, globalIdx);
+            }
+        }
+    });
+
+    slot.addEventListener('pointercancel', () => {
+        if (lpTimer) { clearTimeout(lpTimer); lpTimer = null; }
+    });
+    slot.addEventListener('pointerleave', (e) => {
+        if (lpTimer && (Math.abs(e.clientX - lpStartX) > 10 || Math.abs(e.clientY - lpStartY) > 10)) { 
+            clearTimeout(lpTimer); lpTimer = null; 
+        }
+    });
+};
+
+window.handleShortcutTap = function(scData, globalIdx) {
+    if (!scData) {
+        if (typeof window.addLog === 'function') window.addLog("<span class='color-sys'>インベントリにあるアイテムを長押し後、ドラッグ＆ドロップで登録できます。</span>", 'sys');
+        return;
+    }
+
+    window.ensureUIDs(); 
+
+    let actualItem = null; let actualTab = null; let actualIdx = -1;
+
+    for (const tab in window.player.inventory) {
+        const items = window.player.inventory[tab].items;
+        for (let i = 0; i < items.length; i++) {
+            const item = items[i];
+            if (scData.isStackable && item.id === scData.id) {
+                actualItem = item; actualTab = tab; actualIdx = i; break; 
+            } else if (!scData.isStackable && item.uid === scData.uid) {
+                actualItem = item; actualTab = tab; actualIdx = i; break;
+            }
+        }
+        if (actualItem) break;
+    }
+
+    if (!actualItem) {
+        if (scData.isStackable) {
+            if (typeof window.addLog === 'function') window.addLog("<span class='color-sys'>アイテムを所持していません。</span>", 'sys');
+        }
+        return;
+    }
+
+    if (scData.type === 'consume') {
+        if (window.itemCooldowns && window.itemCooldowns[actualItem.id] > 0) {
+            if (typeof window.addLog === 'function') window.addLog(`<span class='color-sys'>まだ使用できません。</span>`, 'sys');
+            return;
+        }
+
+        if (actualItem.restore) window.player.hp = Math.min(window.player.maxHp, window.player.hp + actualItem.restore);
+        if (typeof window.updateWidgetUI === 'function') window.updateWidgetUI();
+        
+        window.itemCooldowns[actualItem.id] = 3.0;
+
+        actualItem.count--;
+        if (actualItem.count <= 0) {
+            window.player.inventory[actualTab].items.splice(actualIdx, 1);
+        }
+        if (typeof window.renderInventory === 'function') window.renderInventory();
+        
+    } else if (scData.type === 'equip') {
+        if (actualItem.isEquipped) {
+            actualItem.isEquipped = false;
+            window.player.equipped[actualItem.equipSlot] = null;
+        } else {
+            window.player.inventory[actualTab].items.forEach(i => {
+                if (i.equipSlot === actualItem.equipSlot) i.isEquipped = false;
+            });
+            actualItem.isEquipped = true;
+            window.player.equipped[actualItem.equipSlot] = actualItem;
+        }
+        if(typeof window.updatePlayerStats === 'function') window.updatePlayerStats(); 
+        if (typeof window.renderInventory === 'function') window.renderInventory();
+        
+    } else if (scData.type === 'skill') {
+        if (typeof window.addLog === 'function') window.addLog(`<span class='color-sys'>スキルの使用を試みました。(スキルシステム未実装)</span>`, 'sys');
+    }
+};
+
+window.startShortcutDrag = function(scData, globalIdx, e) {
+    window.isScSlotDragging = true;
+    window.scDragState = { active: true, data: scData, sourceIdx: globalIdx };
+    document.body.style.touchAction = 'none';
+
+    let scDragGhost = document.getElementById('scDragGhost');
+    if (!scDragGhost) {
+        scDragGhost = document.createElement('div');
+        scDragGhost.id = 'scDragGhost';
+        scDragGhost.style.cssText = 'position: fixed; pointer-events: none; display: none; z-index: 1000; width: 44px; height: 44px; justify-content: center; align-items: center; opacity: 0.8; transform: translate(-50%, -50%);';
+        document.body.appendChild(scDragGhost);
+    }
+    
+    const rarityColor = window.RARITY && window.RARITY[scData.rarity] ? window.RARITY[scData.rarity].color : '#fff';
+    scDragGhost.innerHTML = `<div style="width: 70%; height: 70%; border-radius: 50%; background-color: ${scData.color}; border: 2px solid ${rarityColor}; box-sizing: border-box;"></div>`;
+    
+    window.scLastX = e.clientX; window.scLastY = e.clientY;
+    scDragGhost.style.left = window.scLastX + 'px'; scDragGhost.style.top = window.scLastY + 'px';
+    scDragGhost.style.display = 'flex';
 };

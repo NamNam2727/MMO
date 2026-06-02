@@ -320,7 +320,7 @@ window.initUI = function() {
         }
     });
 
-    // インベントリ/ショートカットのUI初期化を呼び出す
+    // インベントリUIの初期化を分離した外部JS(inventory.js)から呼び出す
     if(typeof window.initInventoryUI === 'function') {
         window.initInventoryUI();
     }
