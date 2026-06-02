@@ -7,6 +7,18 @@
 window.tempStats = { str: 0, int: 0, vit: 0 }; // 仮振り用のステータス保持
 
 // =========================================================
+// ★ ダブルタップによる画面拡大(ズーム)防止処理 (iOS対策)
+// =========================================================
+let lastTouchEnd = 0;
+document.addEventListener('touchend', (e) => {
+    const now = performance.now();
+    if (now - lastTouchEnd <= 300) {
+        e.preventDefault();
+    }
+    lastTouchEnd = now;
+}, { passive: false });
+
+// =========================================================
 // ★ ログシステム制御
 // =========================================================
 window.getEntityName = function(entity) {
