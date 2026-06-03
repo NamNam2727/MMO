@@ -19,6 +19,33 @@ document.addEventListener('touchend', (e) => {
 }, { passive: false });
 
 // =========================================================
+// ★ UI前面化（Z-index）管理とグローバルタップ処理
+// =========================================================
+window.bringToFront = function(windowId) {
+    const inv = document.getElementById('invWindow');
+    const skill = document.getElementById('skillCreateWindow');
+    const conf = document.getElementById('skillConfirmDialog');
+    
+    if (inv) inv.style.zIndex = (windowId === 'invWindow') ? '60' : '50';
+    if (skill) skill.style.zIndex = (windowId === 'skillCreateWindow') ? '60' : '50';
+    if (conf && conf.style.display !== 'none') conf.style.zIndex = '80';
+};
+
+// アイテム詳細ウィンドウ外（空スロットなど）をタップした際に確実に閉じる処理
+document.addEventListener('pointerdown', (e) => {
+    const detail = document.getElementById('itemDetail');
+    if (detail && detail.style.display !== 'none') {
+        if (!e.target.closest('#itemDetail')) {
+            const slot = e.target.closest('.inv-slot');
+            // 空スロットか、スロット以外の場所をタップした場合は閉じる
+            if (!slot || !slot.querySelector('.item-icon')) {
+                detail.style.display = 'none';
+            }
+        }
+    }
+}, { capture: true });
+
+// =========================================================
 // ★ ログシステム制御
 // =========================================================
 window.getEntityName = function(entity) {
@@ -75,6 +102,12 @@ window.addLog = function(htmlText, type = 'sys') {
 };
 
 window.initUI = function() {
+    // ステータス画面を他のウィンドウより確実に前面に出すためのCSS強制適用
+    const pWidget = document.getElementById('playerWidget');
+    if (pWidget) pWidget.style.setProperty('z-index', '60', 'important');
+    const sWindow = document.getElementById('statusWindow');
+    if (sWindow) sWindow.style.setProperty('z-index', '70', 'important');
+
     const statHeader = document.querySelector('#statusWindow .stat-header');
     if (statHeader) {
         statHeader.style.position = 'sticky';
@@ -161,7 +194,11 @@ window.initUI = function() {
             const trans = { 'fire':'火', 'ice':'氷', 'lightning':'雷', 'wind':'風', 'earth':'地' };
             resistsText = player.equipped.armor.resists.map(r => trans[r] || r).join(', ');
         }
-        document.getElementById('valElements').innerHTML = `武器属性: ${elementText}<br>耐性: ${resistsText}`;
+        
+        const valElementsNode = document.getElementById('valElements');
+        if(valElementsNode) {
+            valElementsNode.innerHTML = `武器属性: ${elementText}<br>耐性: ${resistsText}`;
+        }
 
         const hasPoints = remainingPoints > 0;
         document.getElementById('btnAddStr').disabled = !hasPoints;
@@ -269,21 +306,21 @@ window.initUI = function() {
     });
 
     document.getElementById('playerWidget').addEventListener('pointerdown', (e) => {
-        e.stopPropagation();
         const w = document.getElementById('statusWindow');
-        if (w.style.display === 'flex') {
+        if (w && w.style.display === 'flex') {
             w.style.display = 'none';
             window.tempStats = {str:0, int:0, vit:0};
-        } else { 
-            window.updateStatusUI(); w.style.display = 'flex'; 
+        } else if (w) { 
+            window.updateStatusUI(); 
+            w.style.display = 'flex'; 
         }
-    });
+    }, { passive: true }); // stopPropagationを外し、自然に処理させる
 
     document.getElementById('closeStatusBtn').addEventListener('pointerdown', (e) => { 
-        e.stopPropagation(); 
-        document.getElementById('statusWindow').style.display = 'none'; 
+        const w = document.getElementById('statusWindow');
+        if (w) w.style.display = 'none'; 
         window.tempStats = {str:0, int:0, vit:0};
-    });
+    }, { passive: true });
 
     // ------------------------------------
     // メインアクションボタン

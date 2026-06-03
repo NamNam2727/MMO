@@ -6,14 +6,15 @@
 (function() {
     const baseURL = 'https://namnam2727.github.io/MMO/';
     
-    // 依存関係を考慮した7つのファイルの読み込み順序
+    // 依存関係を考慮した8つのファイルの読み込み順序
     const scriptsToLoad = [
         'config.js',
         'itemDB.js',
         'utils.js',
         'entities.js',
-        'inventory.js', // ★追加: インベントリとD&D制御
+        'inventory.js', // インベントリとD&D制御
         'ui.js',        // 軽量化されたUI制御
+        'skill_create.js', // ★追加: スキル作成機能
         'main.js'
     ];
 
@@ -60,6 +61,11 @@
             window.initUI();
         }
 
+        // ★追加: スキル作成UIとイベントの初期化を実行
+        if (typeof window.initSkillCreateUI === 'function') {
+            window.initSkillCreateUI();
+        }
+
         // A*用のグリッドを初期化
         if (window.player && window.player.radius) {
             window.initPathGrid(window.player.radius);
@@ -74,3 +80,4 @@
     // 読み込み開始
     loadNext();
 })();
+

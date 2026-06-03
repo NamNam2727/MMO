@@ -136,10 +136,28 @@ window.initInventoryUI = function() {
         e.stopPropagation(); itemDetail.style.display = 'none';
     });
 
+    // ★修正: btnUseEquip リスナーの安全性向上とスキルチップ対応
     document.getElementById('btnUseEquip').addEventListener('pointerdown', (e) => {
+        const btnUseEquip = document.getElementById('btnUseEquip');
+        if (btnUseEquip.dataset.isChip === "true") {
+            e.stopPropagation();
+            e.stopImmediatePropagation();
+            e.preventDefault();
+            
+            document.getElementById('itemDetail').style.display = 'none';
+            const tabData = window.player.inventory[window.tabsList[window.currentTabIndex]];
+            if (!tabData) return;
+            const item = tabData.items[window.selectedItemIndex];
+            if (item && typeof window.openSkillCreateWindow === 'function') {
+                window.openSkillCreateWindow(item);
+            }
+            return;
+        }
+
         e.stopPropagation();
         const currentTabName = window.tabsList[window.currentTabIndex];
         const tabData = window.player.inventory[currentTabName];
+        if (!tabData) return;
         const item = tabData.items[window.selectedItemIndex];
         if (!item) return;
 
@@ -167,17 +185,21 @@ window.initInventoryUI = function() {
         itemDetail.style.display = 'none'; window.renderInventory();
     });
 
+    // ★修正: btnDrop リスナーでの詳細画面非表示の確実化
     document.getElementById('btnDrop').addEventListener('pointerdown', (e) => {
         e.stopPropagation();
+        if(itemDetail) itemDetail.style.display = 'none';
+
         const currentTabName = window.tabsList[window.currentTabIndex];
         const tabData = window.player.inventory[currentTabName];
+        if (!tabData) return;
         const item = tabData.items[window.selectedItemIndex];
         if (!item) return;
 
         if (item.count > 1) {
             window.showDropDialog(item, tabData, window.selectedItemIndex);
         } else {
-            window.executeDropLogic(item, tabData, window.selectedItemIndex, 1);
+            window.showConfirmDropDialog(item, tabData, window.selectedItemIndex);
         }
     });
 
@@ -406,7 +428,6 @@ window.compressStacks = function() {
             group.forEach(item => totalCount += item.count);
             const max = group[0].maxStack;
             
-            // 既存の枠を左から順にMAXまで補充
             for (let i = 0; i < group.length; i++) {
                 if (totalCount >= max) {
                     group[i].count = max;
@@ -417,7 +438,6 @@ window.compressStacks = function() {
                 }
             }
             
-            // 既存の枠をすべて埋めても余りがある場合は、新しい枠を生成して追加
             while (totalCount > 0) {
                 const newItem = Object.assign({}, group[0]);
                 newItem.uid = 'uid_' + Date.now() + '_' + Math.floor(Math.random() * 1000000);
@@ -431,7 +451,6 @@ window.compressStacks = function() {
                 items.push(newItem);
             }
             
-            // カウントが0以下になった抜け殻枠を削除
             for (let i = items.length - 1; i >= 0; i--) {
                 const item = items[i];
                 if (item.maxStack > 1 && item.id === id && item.count <= 0) {
@@ -443,8 +462,12 @@ window.compressStacks = function() {
 };
 
 window.renderInventory = function() {
-    // 描画される直前に、常にスタックの自動整列（圧縮）を実行する
     window.compressStacks();
+
+    // ★追加: もしスキル作成中であれば、在庫数を検証する処理をフック
+    if (typeof window.validateSkillMaterials === 'function') {
+        window.validateSkillMaterials();
+    }
 
     const invGrid = document.getElementById('invGrid');
     const goldAmountDisplay = document.getElementById('goldAmount');
@@ -599,6 +622,7 @@ window.toggleInventory = function() {
     }
 };
 
+// ★修正: チップアイテムの独自データ対応
 window.showItemDetail = function(item, index) {
     window.selectedItemIndex = index;
     document.getElementById('detailName').innerText = item.name;
@@ -627,18 +651,31 @@ window.showItemDetail = function(item, index) {
     document.getElementById('detailDesc').innerText = descText;
     
     const btnUseEquip = document.getElementById('btnUseEquip');
-    if (item.type === 'equip') {
+    
+    // スキルチップ判定
+    if (item.chipData) { 
+        btnUseEquip.innerText = '使用 (スキル作成)';
+        btnUseEquip.className = 'detail-btn';
+        btnUseEquip.style.backgroundColor = '#aa5500';
         btnUseEquip.style.display = 'block';
-        if (item.isEquipped) { btnUseEquip.innerText = 'はずす'; btnUseEquip.className = 'detail-btn btn-unequip'; } 
-        else { btnUseEquip.innerText = '装備'; btnUseEquip.className = 'detail-btn btn-equip'; }
-    } else if (item.type === 'consume') {
-        btnUseEquip.innerText = '使用'; btnUseEquip.className = 'detail-btn'; btnUseEquip.style.display = 'block';
+        btnUseEquip.dataset.isChip = "true";
     } else {
-        btnUseEquip.style.display = 'none'; 
+        btnUseEquip.dataset.isChip = "false";
+        btnUseEquip.style.backgroundColor = ''; // 色をリセット
+        if (item.type === 'equip') {
+            btnUseEquip.style.display = 'block';
+            if (item.isEquipped) { btnUseEquip.innerText = 'はずす'; btnUseEquip.className = 'detail-btn btn-unequip'; } 
+            else { btnUseEquip.innerText = '装備'; btnUseEquip.className = 'detail-btn btn-equip'; }
+        } else if (item.type === 'consume') {
+            btnUseEquip.innerText = '使用'; btnUseEquip.className = 'detail-btn'; btnUseEquip.style.display = 'block';
+        } else {
+            btnUseEquip.style.display = 'none'; 
+        }
     }
     document.getElementById('itemDetail').style.display = 'flex';
 };
 
+// ★修正: スキル専用データの引き継ぎ
 window.executeDropLogic = function(item, tabData, idx, count) {
     if (item.isEquipped) { 
         item.isEquipped = false; window.player.equipped[item.equipSlot] = null; 
@@ -649,32 +686,48 @@ window.executeDropLogic = function(item, tabData, idx, count) {
         tabData.items.splice(idx, 1); 
         window.selectedItemIndex = -1; 
     }
-    window.droppedItems.push({
+    
+    const droppedItem = {
         uid: Date.now() + Math.random(), id: item.id, 
         type: item.type, equipSlot: item.equipSlot, name: item.name, rarity: item.rarity, 
         color: item.color, desc: item.desc, stats: item.stats, 
         element: item.element, elementParams: item.elementParams, resists: item.resists, restore: item.restore, 
         maxStack: item.maxStack, count: count, x: window.player.x, y: window.player.y, 
         radius: 8, ownerId: window.player.id, lifeTime: 0
-    });
+    };
+    
+    // スキル用データを引き継ぐ
+    if (item.chipData) droppedItem.chipData = JSON.parse(JSON.stringify(item.chipData));
+    if (item.materialData) droppedItem.materialData = JSON.parse(JSON.stringify(item.materialData));
+    
+    window.droppedItems.push(droppedItem);
+    
     const itemDetail = document.getElementById('itemDetail');
     if(itemDetail) itemDetail.style.display = 'none'; 
     window.renderInventory();
 };
 
+// ★修正: 二重表示の防止と完全なイベント制御
 window.showConfirmDropDialog = function(item, tabData, idx) {
+    if (document.getElementById('dropConfirmOverlay')) return; 
+
     const overlay = document.createElement('div');
+    overlay.id = 'dropConfirmOverlay';
     overlay.style.cssText = 'position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:60; display:flex; justify-content:center; align-items:center; pointer-events:auto; touch-action:none;';
     
-    const stopAll = (e) => { e.stopPropagation(); };
+    const stopAll = (e) => { 
+        e.stopPropagation(); 
+        if(e.cancelable && e.target.tagName !== 'INPUT') e.preventDefault(); 
+    };
     overlay.addEventListener('pointerdown', (e) => { 
         e.stopPropagation(); 
         if (e.target === overlay) { overlay.remove(); }
     });
     overlay.addEventListener('pointerup', stopAll);
     overlay.addEventListener('pointermove', stopAll);
-    overlay.addEventListener('touchstart', stopAll);
-    overlay.addEventListener('touchend', stopAll);
+    overlay.addEventListener('touchstart', stopAll, {passive: false});
+    overlay.addEventListener('touchend', stopAll, {passive: false});
+    overlay.addEventListener('click', stopAll);
     
     const dialog = document.createElement('div');
     dialog.style.cssText = 'width:200px; background:rgba(20,20,20,0.95); border:1px solid #777; border-radius:8px; padding:15px; position:relative; text-align:center; color:white;';
@@ -703,27 +756,30 @@ window.showConfirmDropDialog = function(item, tabData, idx) {
     dialog.appendChild(okBtn);
     overlay.appendChild(dialog);
     
-    overlay.addEventListener('pointerup', (e) => { 
-        e.stopPropagation();
-        if(e.target === overlay) { overlay.remove(); }
-    });
-    
     document.getElementById('ui-layer').appendChild(overlay);
 };
 
+// ★修正: 二重表示の防止と完全なイベント制御
 window.showDropDialog = function(item, tabData, selectedIndex) {
+    if (document.getElementById('dropAmountOverlay')) return; 
+
     const overlay = document.createElement('div');
+    overlay.id = 'dropAmountOverlay';
     overlay.style.cssText = 'position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:60; display:flex; justify-content:center; align-items:center; pointer-events:auto; touch-action:none;';
 
-    const stopAll = (e) => { e.stopPropagation(); };
+    const stopAll = (e) => { 
+        e.stopPropagation(); 
+        if(e.cancelable && e.target.tagName !== 'INPUT') e.preventDefault(); 
+    };
     overlay.addEventListener('pointerdown', (e) => { 
         e.stopPropagation(); 
         if (e.target === overlay) { overlay.remove(); }
     });
     overlay.addEventListener('pointerup', stopAll);
     overlay.addEventListener('pointermove', stopAll);
-    overlay.addEventListener('touchstart', stopAll);
-    overlay.addEventListener('touchend', stopAll);
+    overlay.addEventListener('touchstart', stopAll, {passive: false});
+    overlay.addEventListener('touchend', stopAll, {passive: false});
+    overlay.addEventListener('click', stopAll);
 
     const dialog = document.createElement('div');
     dialog.style.cssText = 'width:180px; background:rgba(20,20,20,0.95); border:1px solid #777; border-radius:8px; padding:15px; position:relative; text-align:center; color:white;';
@@ -757,8 +813,10 @@ window.showDropDialog = function(item, tabData, selectedIndex) {
 
     minusBtn.addEventListener('pointerdown', (e) => { e.stopPropagation(); if (currentCount > 1) { currentCount--; updateDisplay(); } });
     plusBtn.addEventListener('pointerdown', (e) => { e.stopPropagation(); if (currentCount < item.count) { currentCount++; updateDisplay(); } });
-    slider.addEventListener('pointerdown', stopAll);
-    slider.addEventListener('pointermove', stopAll);
+    
+    // スライダー操作は止めない
+    slider.addEventListener('pointerdown', (e) => { e.stopPropagation(); });
+    slider.addEventListener('pointermove', (e) => { e.stopPropagation(); });
     slider.addEventListener('input', (e) => {
         currentCount = parseInt(e.target.value, 10);
         countDisplay.innerText = currentCount + ' 個';
@@ -770,7 +828,7 @@ window.showDropDialog = function(item, tabData, selectedIndex) {
     okBtn.addEventListener('pointerdown', stopAll);
     okBtn.addEventListener('pointerup', (e) => {
         e.stopPropagation();
-        window.executeDropLogic(item, tabData, window.dragState.sourceIdx, currentCount);
+        window.executeDropLogic(item, tabData, selectedIndex, currentCount);
         overlay.remove();
     });
 
@@ -784,11 +842,6 @@ window.showDropDialog = function(item, tabData, selectedIndex) {
     dialog.appendChild(slider);
     dialog.appendChild(okBtn);
     overlay.appendChild(dialog);
-
-    overlay.addEventListener('pointerup', (e) => { 
-        e.stopPropagation();
-        if(e.target === overlay) { overlay.remove(); }
-    });
     
     document.getElementById('ui-layer').appendChild(overlay);
 };
@@ -967,6 +1020,7 @@ window.setupShortcutSlotEvents = function(slot, globalIdx, scData) {
     });
 };
 
+// ★修正: ショートカットからのスキルチップ呼び出し対応
 window.handleShortcutTap = function(scData, globalIdx) {
     if (!scData) {
         if (typeof window.addLog === 'function') window.addLog("<span class='color-sys'>インベントリにあるアイテムを長押し後、ドラッグ＆ドロップで登録できます。</span>", 'sys');
@@ -993,6 +1047,14 @@ window.handleShortcutTap = function(scData, globalIdx) {
     if (!actualItem) {
         if (scData.isStackable) {
             if (typeof window.addLog === 'function') window.addLog("<span class='color-sys'>アイテムを所持していません。</span>", 'sys');
+        }
+        return;
+    }
+
+    // スキルチップ判定
+    if (actualItem.chipData) {
+        if (typeof window.openSkillCreateWindow === 'function') {
+            window.openSkillCreateWindow(actualItem);
         }
         return;
     }
