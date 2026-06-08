@@ -9,14 +9,16 @@
     // 依存関係を考慮したファイルの読み込み順序
     const scriptsToLoad = [
         'config.js',
-        'skill_db.js',  // ★追加: スキル効果のマスターデータ
+        'skill_db.js',     // スキルマスターデータ
         'itemDB.js',
         'utils.js',
         'entities.js',
-        'inventory.js', // インベントリとD&D制御
-        'ui.js',        // 軽量化されたUI制御
+        'inventory.js',    // インベントリ基本機能
+        'shortcut.js',     // ★新規追加: ショートカット機能
+        'ui.js',           // 軽量化されたUI制御
         'skill_create.js', // スキル作成機能
-        'main.js'       // 新規スキルロジック実装先
+        'skill.js',        // ★追加: スキル実行ロジック
+        'main.js'
     ];
 
     let loadedCount = 0;
@@ -24,6 +26,7 @@
     function loadScript(src, callback) {
         const script = document.createElement('script');
         script.type = 'text/javascript';
+        // キャッシュ回避
         script.src = baseURL + src + '?v=' + new Date().getTime(); 
         
         script.onload = () => {
@@ -62,7 +65,7 @@
             window.initUI();
         }
 
-        // ★追加: スキル作成UIとイベントの初期化を実行
+        // スキル作成UIとイベントの初期化を実行
         if (typeof window.initSkillCreateUI === 'function') {
             window.initSkillCreateUI();
         }
