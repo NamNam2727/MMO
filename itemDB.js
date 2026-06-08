@@ -59,5 +59,66 @@ window.ITEM_DB = {
     'slime_jelly': { 
         id: 'slime_jelly', type: 'etc', name: 'スライムの粘液', 
         rarity: 'Common', maxStack: 99, color: '#00aaaa', desc: 'ベタベタする素材。' 
+    },
+
+    // ==========================================
+    // ★追加: スキル作成用のチップとETC素材
+    // ==========================================
+    'chip_test_str': { 
+        id: 'chip_test_str', type: 'consume', name: '力チップ(テスト)', 
+        rarity: 'Epic', maxStack: 99, color: '#aa5500', desc: 'ちから依存スキルのベース\n(最大容量: 20)', 
+        chipData: { capacity: 20, dependency: 'str' } 
+    },
+    'chip_test_int': { 
+        id: 'chip_test_int', type: 'consume', name: '魔力チップ(テスト)', 
+        rarity: 'Epic', maxStack: 99, color: '#5500aa', desc: 'まりょく依存スキルのベース\n(最大容量: 20)', 
+        chipData: { capacity: 20, dependency: 'int' } 
+    },
+    
+    // ETC素材は desc を後から自動生成するため省略
+    'etc_atk_up': { 
+        id: 'etc_atk_up', type: 'etc', name: '素材:攻撃倍率+10%', rarity: 'Common', maxStack: 99, color: '#ffaaaa', 
+        materialData: { cost: 2, effects: [{type: 'atk_up', value: 10}] } 
+    },
+    'etc_range_up': { 
+        id: 'etc_range_up', type: 'etc', name: '素材:射程+5', rarity: 'Common', maxStack: 99, color: '#aaffaa', 
+        materialData: { cost: 2, effects: [{type: 'range_up', value: 5}] } 
+    },
+    'etc_heal': { 
+        id: 'etc_heal', type: 'etc', name: '素材:回復30%', rarity: 'Rare', maxStack: 99, color: '#aaffff', 
+        materialData: { cost: 6, dependency: 'int', effects: [{type: 'heal', value: 30}] } 
+    },
+    'etc_target_self': { 
+        id: 'etc_target_self', type: 'etc', name: '素材:対象変更<自身>', rarity: 'Common', maxStack: 99, color: '#ffffaa', 
+        materialData: { cost: 0, effects: [{type: 'target_self', value: 1}] } 
+    },
+    'etc_area_self': { 
+        id: 'etc_area_self', type: 'etc', name: '素材:効果範囲<自身周囲>', rarity: 'Uncommon', maxStack: 99, color: '#ffaaff', 
+        materialData: { cost: 4, effects: [{type: 'area_self', value: 5}] } 
+    },
+    'etc_ice': { 
+        id: 'etc_ice', type: 'etc', name: '素材:氷属性', rarity: 'Rare', maxStack: 99, color: '#aaaaff', 
+        materialData: { cost: 4, effects: [{type: 'ice', value: 1}] } 
     }
 };
+
+// ==========================================
+// 初期化時にETCアイテムのdescを自動生成
+// ==========================================
+for (const id in window.ITEM_DB) {
+    const item = window.ITEM_DB[id];
+    if (item.type === 'etc' && item.materialData && item.materialData.effects) {
+        // skill_db.js の getEffectText を使用してテキスト化
+        const effTexts = item.materialData.effects.map(e => {
+            if (typeof window.getEffectText === 'function') {
+                return window.getEffectText(e);
+            }
+            return '不明な効果';
+        });
+        
+        let depText = item.materialData.dependency === 'int' ? '(魔力依存)' : 
+                      item.materialData.dependency === 'str' ? '(力依存)' : '';
+        
+        item.desc = `${effTexts.join(', ')}${depText}\nコスト${item.materialData.cost}`;
+    }
+}

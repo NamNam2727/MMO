@@ -1,7 +1,7 @@
 // =========================================================
 // skill_create.js
 // スキル作成ウィンドウのUI生成、イベント制御、プレビュー更新
-// および作成処理（第2フェーズへの繋ぎ）を行う
+// および作成処理（第2フェーズの実装完了版）
 // =========================================================
 
 (function() {
@@ -13,7 +13,7 @@
         skillWin.id = 'skillCreateWindow';
         skillWin.style.cssText = 'position:absolute; display:none; flex-direction:column; width:280px; background:rgba(20,20,20,0.95); border:2px solid #aaa; border-radius:8px; z-index:50; color:#fff; pointer-events:auto; touch-action:none; box-shadow:0 10px 20px rgba(0,0,0,0.8);';
         
-        // ウィンドウの透過防止（入力欄の操作は邪魔しない）
+        // ウィンドウの透過防止
         skillWin.addEventListener('pointerdown', (e) => {
             if(window.bringToFront) window.bringToFront('skillCreateWindow');
             e.stopPropagation();
@@ -232,15 +232,12 @@
             
             const requiredMats = {};
             window.skillCreateState.materials.forEach(mat => {
-                if (mat) {
-                    requiredMats[mat.id] = (requiredMats[mat.id] || 0) + 1;
-                }
+                if (mat) requiredMats[mat.id] = (requiredMats[mat.id] || 0) + 1;
             });
             
             for (const id in requiredMats) {
                 if (!invCounts[id] || invCounts[id] < requiredMats[id]) {
-                    missing = true;
-                    break;
+                    missing = true; break;
                 }
             }
 
@@ -249,14 +246,22 @@
             const chip = window.skillCreateState.baseChip;
             const dep = chip.chipData.dependency;
             
+            // 効果の集計と自動テキスト化
             let totalCost = 0;
-            const effectsList = [];
+            let mergedEffects = {};
             window.skillCreateState.materials.forEach(mat => {
-                if (mat) {
+                if (mat && mat.materialData) {
                     totalCost += mat.materialData.cost;
-                    effectsList.push('・' + mat.desc.split('(')[0].trim());
+                    if(mat.materialData.effects) {
+                        mat.materialData.effects.forEach(eff => {
+                            if(!mergedEffects[eff.type]) mergedEffects[eff.type] = 0;
+                            mergedEffects[eff.type] += eff.value; 
+                        });
+                    }
                 }
             });
+            const finalEffects = Object.keys(mergedEffects).map(k => ({ type: k, value: mergedEffects[k] }));
+            const effectTexts = finalEffects.map(e => window.getEffectText ? window.getEffectText(e) : `${e.type}+${e.value}`);
             
             document.getElementById('confirmIcon').innerText = icon;
             document.getElementById('confirmName').innerText = name;
@@ -264,7 +269,7 @@
             document.getElementById('confirmCost').innerText = totalCost;
             
             const effElem = document.getElementById('confirmEffects');
-            if(effectsList.length > 0) effElem.innerHTML = effectsList.join('<br>');
+            if(effectTexts.length > 0) effElem.innerHTML = effectTexts.map(t => '・'+t).join('<br>');
             else effElem.innerHTML = 'なし (効果なし)';
             
             if (missing) {
@@ -294,40 +299,54 @@
             if (document.getElementById('scConfirmOkBtn').disabled) return;
             e.stopPropagation();
             const name = document.getElementById('scNameInput').value.trim();
+            const icon = document.getElementById('scIconInput').value.trim();
+            const chipItem = window.skillCreateState.baseChip;
             
-            const chipId = window.skillCreateState.baseChip.id;
-            let chipConsumed = false;
-            for (const tab in window.player.inventory) {
-                const items = window.player.inventory[tab].items;
-                for (let i = 0; i < items.length; i++) {
-                    if (items[i].id === chipId) {
-                        items[i].count -= 1;
-                        if (items[i].count <= 0) items.splice(i, 1);
-                        chipConsumed = true;
-                        break;
-                    }
-                }
-                if (chipConsumed) break;
-            }
-            
-            window.skillCreateState.materials.forEach(mat => {
+            // チップと素材の確実な消費処理
+            const itemsToConsume = [chipItem, ...window.skillCreateState.materials];
+            itemsToConsume.forEach(mat => {
                 if (!mat) return;
-                let matConsumed = false;
+                let consumed = false;
                 for (const tab in window.player.inventory) {
                     const items = window.player.inventory[tab].items;
                     for (let i = 0; i < items.length; i++) {
-                        if (items[i].id === mat.id) {
+                        if (items[i].id === mat.id && items[i].count > 0) {
                             items[i].count -= 1;
                             if (items[i].count <= 0) items.splice(i, 1);
-                            matConsumed = true;
-                            break;
+                            consumed = true; break;
                         }
                     }
-                    if (matConsumed) break;
+                    if (consumed) break;
                 }
             });
 
-            if (typeof window.addLog === 'function') window.addLog(`<span class='color-status'>スキル「${name}」を作成しました！（第2フェーズ先行モック）</span>`, 'sys');
+            // 完成スキルの効果集計とテキスト化
+            let totalCost = 0;
+            let mergedEffects = {};
+            window.skillCreateState.materials.forEach(mat => {
+                if (mat && mat.materialData) {
+                    totalCost += mat.materialData.cost;
+                    if(mat.materialData.effects) {
+                        mat.materialData.effects.forEach(eff => {
+                            if(!mergedEffects[eff.type]) mergedEffects[eff.type] = 0;
+                            mergedEffects[eff.type] += eff.value; 
+                        });
+                    }
+                }
+            });
+            const finalEffects = Object.keys(mergedEffects).map(k => ({ type: k, value: mergedEffects[k] }));
+            const effectTexts = finalEffects.map(e => window.getEffectText ? window.getEffectText(e) : `${e.type}+${e.value}`);
+
+            // 新規スキルの生成と格納
+            const newSkill = {
+                id: 'skill_' + Date.now(), uid: 'uid_' + Date.now(), type: 'skill',
+                name: name, icon: icon, rarity: chipItem.rarity, color: chipItem.color, maxStack: 1,
+                desc: `コスト:${totalCost} 依存:${chipItem.chipData.dependency==='str'?'力':'魔'}\n【効果】\n${effectTexts.length > 0 ? effectTexts.map(t=>'・'+t).join('\n') : 'なし'}`,
+                skillData: { cost: totalCost, dependency: chipItem.chipData.dependency, effects: finalEffects }
+            };
+
+            window.addItemToInventory(newSkill);
+            if (typeof window.addLog === 'function') window.addLog(`<span class='color-item'>スキル「${name}」</span> が完成し、スキルタブに格納されました！`, 'sys');
             
             document.getElementById('skillConfirmOverlay').style.display = 'none';
             document.getElementById('skillConfirmDialog').style.display = 'none';
@@ -402,7 +421,7 @@
                     <div style="width:24px; height:24px; background:${mat.color}; border:2px solid ${rColor}; border-radius:50%; margin-right:10px; flex-shrink:0;"></div>
                     <div style="color:#fff; font-size:11px; flex-grow:1; line-height:1.3;">
                         <div style="font-weight:bold; font-size:12px;">${mat.name}</div>
-                        <div style="color:#ccc;">${mat.desc}</div>
+                        <div style="color:#ccc; white-space:pre-wrap;">${mat.desc}</div>
                     </div>
                 `;
                 slot.addEventListener('pointerdown', (e) => {
@@ -436,8 +455,17 @@
         const dep = chip.chipData.dependency;
         
         let totalCost = 0;
+        let mergedEffects = {};
         window.skillCreateState.materials.forEach(mat => {
-            if (mat) totalCost += mat.materialData.cost;
+            if (mat && mat.materialData) {
+                totalCost += mat.materialData.cost;
+                if(mat.materialData.effects) {
+                    mat.materialData.effects.forEach(eff => {
+                        if(!mergedEffects[eff.type]) mergedEffects[eff.type] = 0;
+                        mergedEffects[eff.type] += eff.value; 
+                    });
+                }
+            }
         });
         
         const createBtn = document.getElementById('scCreateBtn');
@@ -452,6 +480,23 @@
             errorMsg = '※コストが容量をオーバーしています。';
         } else if (totalCost <= 0 && window.skillCreateState.materials.some(m => m !== null)) {
             errorMsg = '※合計コストは1以上必要です。';
+        } else {
+            // ★ マイナス値によるロック判定（バリデーション）
+            for (let type in mergedEffects) {
+                let val = mergedEffects[type];
+                if (type === 'atk_up') {
+                    if (100 + val < 0) { // 攻撃倍率は基本100%があるので合算してマイナスなら不可
+                        errorMsg = '※攻撃倍率が0%未満になる組み合わせはできません。';
+                        break;
+                    }
+                } else {
+                    const dbData = window.SKILL_EFFECT_DB && window.SKILL_EFFECT_DB[type];
+                    if (dbData && dbData.allowNegative === false && val < 0) {
+                        errorMsg = `※${dbData.name}が0未満になる組み合わせはできません。`;
+                        break;
+                    }
+                }
+            }
         }
         
         document.getElementById('scDepText').innerText = dep === 'str' ? 'ちから' : dep === 'int' ? 'まりょく' : 'なし';

@@ -136,20 +136,32 @@ window.initInventoryUI = function() {
         e.stopPropagation(); itemDetail.style.display = 'none';
     });
 
-    // ★修正: btnUseEquip リスナーの安全性向上とスキルチップ対応
+    // btnUseEquip リスナー
     document.getElementById('btnUseEquip').addEventListener('pointerdown', (e) => {
         const btnUseEquip = document.getElementById('btnUseEquip');
+        
+        // スキルチップ使用時
         if (btnUseEquip.dataset.isChip === "true") {
-            e.stopPropagation();
-            e.stopImmediatePropagation();
-            e.preventDefault();
-            
+            e.stopPropagation(); e.stopImmediatePropagation(); e.preventDefault();
             document.getElementById('itemDetail').style.display = 'none';
             const tabData = window.player.inventory[window.tabsList[window.currentTabIndex]];
             if (!tabData) return;
             const item = tabData.items[window.selectedItemIndex];
             if (item && typeof window.openSkillCreateWindow === 'function') {
                 window.openSkillCreateWindow(item);
+            }
+            return;
+        }
+
+        // ★追加: 完成スキル使用時
+        if (btnUseEquip.dataset.isSkill === "true") {
+            e.stopPropagation(); e.stopImmediatePropagation(); e.preventDefault();
+            document.getElementById('itemDetail').style.display = 'none';
+            const tabData = window.player.inventory[window.tabsList[window.currentTabIndex]];
+            if (!tabData) return;
+            const item = tabData.items[window.selectedItemIndex];
+            if (item && typeof window.prepareSkill === 'function') {
+                window.prepareSkill(item);
             }
             return;
         }
@@ -185,7 +197,6 @@ window.initInventoryUI = function() {
         itemDetail.style.display = 'none'; window.renderInventory();
     });
 
-    // ★修正: btnDrop リスナーでの詳細画面非表示の確実化
     document.getElementById('btnDrop').addEventListener('pointerdown', (e) => {
         e.stopPropagation();
         if(itemDetail) itemDetail.style.display = 'none';
@@ -399,9 +410,6 @@ window.ensureUIDs = function() {
     }
 };
 
-// =========================================================
-// ★ アイテムスタックの自動整列 (圧縮) 処理
-// =========================================================
 window.compressStacks = function() {
     if (!window.player || !window.player.inventory) return;
     
@@ -409,7 +417,6 @@ window.compressStacks = function() {
         const items = window.player.inventory[tab].items;
         if (!items) continue;
         
-        // 種類(ID)ごとにスタック可能なアイテムをまとめる
         const itemsById = {};
         for (let i = 0; i < items.length; i++) {
             const item = items[i];
@@ -419,7 +426,6 @@ window.compressStacks = function() {
             }
         }
         
-        // 各IDごとに最大数まで詰める
         for (const id in itemsById) {
             const group = itemsById[id];
             if (group.length === 0) continue;
@@ -464,7 +470,6 @@ window.compressStacks = function() {
 window.renderInventory = function() {
     window.compressStacks();
 
-    // ★追加: もしスキル作成中であれば、在庫数を検証する処理をフック
     if (typeof window.validateSkillMaterials === 'function') {
         window.validateSkillMaterials();
     }
@@ -494,8 +499,15 @@ window.renderInventory = function() {
                 ctOverlay = `<div class="ct-overlay" data-ct-id="${item.id}" style="position: absolute; bottom: 0; left: 0; width: 100%; background: rgba(0,0,0,0.7); height: 0%;"></div>`;
             }
 
-            slot.innerHTML = `<div class="item-icon" style="background-color: ${item.color}; border: 2px solid ${rarityColor}; box-sizing: border-box; position: relative; overflow: hidden; border-radius: 50%;">${ctOverlay}</div>`;
+            // ★修正: flexboxを設定し、子要素(絵文字)を中央配置しやすくする
+            slot.innerHTML = `<div class="item-icon" style="background-color: ${item.color}; border: 2px solid ${rarityColor}; box-sizing: border-box; position: relative; overflow: hidden; border-radius: 50%; display:flex; justify-content:center; align-items:center;">${ctOverlay}</div>`;
             
+            // ★追加: スキルアイコン(絵文字)の描画
+            if (item.type === 'skill' && item.icon) {
+                const iconDiv = slot.querySelector('.item-icon');
+                iconDiv.innerHTML += `<span class="emoji-icon" style="position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); font-size:24px; line-height:1;">${item.icon}</span>`;
+            }
+
             if (item.maxStack > 1) slot.innerHTML += `<div class="item-count">${item.count}</div>`;
             if (item.isEquipped) slot.innerHTML += `<div class="item-equip-mark">E</div>`;
             
@@ -607,22 +619,6 @@ window.switchTab = function(index) {
     window.renderInventory();
 };
 
-window.toggleInventory = function() {
-    if(!window.invWindow) return;
-    const itemDetail = document.getElementById('itemDetail');
-    if (window.invWindow.style.display === 'flex') {
-        window.invWindow.style.display = 'none'; 
-        if(itemDetail) itemDetail.style.display = 'none';
-    } else {
-        window.invWindow.style.display = 'flex'; 
-        window.invWindow.style.top = '10%'; 
-        window.invWindow.style.left = '5%';
-        window.renderInventory();
-        setTimeout(window.updateTabIndicator, 10); 
-    }
-};
-
-// ★修正: チップアイテムの独自データ対応
 window.showItemDetail = function(item, index) {
     window.selectedItemIndex = index;
     document.getElementById('detailName').innerText = item.name;
@@ -648,19 +644,32 @@ window.showItemDetail = function(item, index) {
         if (item.elementParams.duration) descText += `\n効果時間: ${item.elementParams.duration}s`;
         if (item.elementParams.distance) descText += `\n吹飛距離: ${item.elementParams.distance}`;
     }
-    document.getElementById('detailDesc').innerText = descText;
+    
+    const descElem = document.getElementById('detailDesc');
+    descElem.innerText = descText;
+    descElem.style.whiteSpace = "pre-wrap"; // 改行を反映
     
     const btnUseEquip = document.getElementById('btnUseEquip');
     
-    // スキルチップ判定
-    if (item.chipData) { 
+    // スキル発動判定を追加
+    if (item.type === 'skill') {
+        btnUseEquip.innerText = 'スキル発動';
+        btnUseEquip.className = 'detail-btn';
+        btnUseEquip.style.backgroundColor = '#cc22cc';
+        btnUseEquip.style.display = 'block';
+        btnUseEquip.dataset.isSkill = "true";
+        btnUseEquip.dataset.isChip = "false";
+    }
+    else if (item.chipData) { 
         btnUseEquip.innerText = '使用 (スキル作成)';
         btnUseEquip.className = 'detail-btn';
         btnUseEquip.style.backgroundColor = '#aa5500';
         btnUseEquip.style.display = 'block';
         btnUseEquip.dataset.isChip = "true";
+        btnUseEquip.dataset.isSkill = "false";
     } else {
         btnUseEquip.dataset.isChip = "false";
+        btnUseEquip.dataset.isSkill = "false";
         btnUseEquip.style.backgroundColor = ''; // 色をリセット
         if (item.type === 'equip') {
             btnUseEquip.style.display = 'block';
@@ -675,7 +684,7 @@ window.showItemDetail = function(item, index) {
     document.getElementById('itemDetail').style.display = 'flex';
 };
 
-// ★修正: スキル専用データの引き継ぎ
+// ★修正: スキル専用データ（アイコンや効果）の引き継ぎ
 window.executeDropLogic = function(item, tabData, idx, count) {
     if (item.isEquipped) { 
         item.isEquipped = false; window.player.equipped[item.equipSlot] = null; 
@@ -700,6 +709,11 @@ window.executeDropLogic = function(item, tabData, idx, count) {
     if (item.chipData) droppedItem.chipData = JSON.parse(JSON.stringify(item.chipData));
     if (item.materialData) droppedItem.materialData = JSON.parse(JSON.stringify(item.materialData));
     
+    if (item.type === 'skill' || item.icon || item.skillData) {
+        if (item.icon) droppedItem.icon = item.icon;
+        if (item.skillData) droppedItem.skillData = JSON.parse(JSON.stringify(item.skillData));
+    }
+
     window.droppedItems.push(droppedItem);
     
     const itemDetail = document.getElementById('itemDetail');
@@ -707,7 +721,6 @@ window.executeDropLogic = function(item, tabData, idx, count) {
     window.renderInventory();
 };
 
-// ★修正: 二重表示の防止と完全なイベント制御
 window.showConfirmDropDialog = function(item, tabData, idx) {
     if (document.getElementById('dropConfirmOverlay')) return; 
 
@@ -759,7 +772,6 @@ window.showConfirmDropDialog = function(item, tabData, idx) {
     document.getElementById('ui-layer').appendChild(overlay);
 };
 
-// ★修正: 二重表示の防止と完全なイベント制御
 window.showDropDialog = function(item, tabData, selectedIndex) {
     if (document.getElementById('dropAmountOverlay')) return; 
 
@@ -814,7 +826,6 @@ window.showDropDialog = function(item, tabData, selectedIndex) {
     minusBtn.addEventListener('pointerdown', (e) => { e.stopPropagation(); if (currentCount > 1) { currentCount--; updateDisplay(); } });
     plusBtn.addEventListener('pointerdown', (e) => { e.stopPropagation(); if (currentCount < item.count) { currentCount++; updateDisplay(); } });
     
-    // スライダー操作は止めない
     slider.addEventListener('pointerdown', (e) => { e.stopPropagation(); });
     slider.addEventListener('pointermove', (e) => { e.stopPropagation(); });
     slider.addEventListener('input', (e) => {
@@ -953,6 +964,12 @@ window.populateShortcutPage = function(container, pageIndex) {
                     </div>
                 `;
                 
+                // ★追加: ショートカットのスキルアイコン(絵文字)の描画
+                if (actualItem && actualItem.type === 'skill' && actualItem.icon) {
+                    const iconDiv = slot.querySelector('.item-icon');
+                    iconDiv.innerHTML += `<span class="emoji-icon" style="position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); font-size:24px; line-height:1;">${actualItem.icon}</span>`;
+                }
+
                 if (scData.isStackable) {
                     slot.innerHTML += `<div class="item-count" style="position:absolute; bottom:1px; right:2px; color:white; font-size:9px; text-shadow:1px 1px 1px black;">${totalCount}</div>`;
                 }
@@ -1020,7 +1037,7 @@ window.setupShortcutSlotEvents = function(slot, globalIdx, scData) {
     });
 };
 
-// ★修正: ショートカットからのスキルチップ呼び出し対応
+// ★修正: ショートカットからのスキル発動呼び出し対応
 window.handleShortcutTap = function(scData, globalIdx) {
     if (!scData) {
         if (typeof window.addLog === 'function') window.addLog("<span class='color-sys'>インベントリにあるアイテムを長押し後、ドラッグ＆ドロップで登録できます。</span>", 'sys');
@@ -1053,9 +1070,13 @@ window.handleShortcutTap = function(scData, globalIdx) {
 
     // スキルチップ判定
     if (actualItem.chipData) {
-        if (typeof window.openSkillCreateWindow === 'function') {
-            window.openSkillCreateWindow(actualItem);
-        }
+        if (typeof window.openSkillCreateWindow === 'function') window.openSkillCreateWindow(actualItem);
+        return;
+    }
+
+    // ★追加: スキル実行判定
+    if (actualItem.type === 'skill') {
+        if (typeof window.prepareSkill === 'function') window.prepareSkill(actualItem);
         return;
     }
 
@@ -1089,9 +1110,6 @@ window.handleShortcutTap = function(scData, globalIdx) {
         }
         if(typeof window.updatePlayerStats === 'function') window.updatePlayerStats(); 
         if (typeof window.renderInventory === 'function') window.renderInventory();
-        
-    } else if (scData.type === 'skill') {
-        if (typeof window.addLog === 'function') window.addLog(`<span class='color-sys'>スキルの使用を試みました。(スキルシステム未実装)</span>`, 'sys');
     }
 };
 
