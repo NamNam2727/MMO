@@ -13,6 +13,10 @@ window.scLastY = 0;
 window.scSwipeActive = false;
 
 window.initShortcutUI = function() {
+    // ★欠落していた初期化コードを復旧
+    if (!window.player) return;
+    if (!window.player.shortcuts) window.player.shortcuts = Array(30).fill(null);
+
     const scViewport = document.getElementById('shortcutViewport');
     const scTrack = document.getElementById('shortcutTrack');
     let scPointerDown = false;
@@ -169,7 +173,9 @@ window.registerShortcut = function(scIdx, item) {
 };
 
 window.renderShortcutPages = function() {
-    if (!window.player || !window.player.shortcuts) return;
+    // ★念のため、ここでも安全策として初期化を確認
+    if (!window.player) return;
+    if (!window.player.shortcuts) window.player.shortcuts = Array(30).fill(null);
     
     const prevPage = (window.scCurrentPage - 1 + 10) % 10;
     const nextPage = (window.scCurrentPage + 1) % 10;
