@@ -311,6 +311,7 @@ window.initInventoryUI = function() {
                             window.renderInventory();
                         }
                     } else if (scSlot && scSlot.dataset.scIdx !== undefined) {
+                        // ショートカットへの登録処理
                         const scIdx = parseInt(scSlot.dataset.scIdx);
                         const item = window.dragState.item;
                         window.ensureUIDs();
@@ -337,6 +338,7 @@ window.initInventoryUI = function() {
         window.addEventListener('touchend', handleInvDropEnd);
     }
 
+    // ショートカットの初期化関数が読み込まれていれば実行
     if (typeof window.initShortcutUI === 'function') {
         window.initShortcutUI();
     }
@@ -453,7 +455,7 @@ window.renderInventory = function() {
             const rarityColor = window.RARITY && window.RARITY[item.rarity] ? window.RARITY[item.rarity].color : '#fff';
             
             let ctOverlay = '';
-            if (item.type === 'consume') {
+            if (item.type === 'consume' || item.type === 'skill') {
                 ctOverlay = `<div class="ct-overlay" data-ct-id="${item.id}" style="position: absolute; bottom: 0; left: 0; width: 100%; background: rgba(0,0,0,0.7); height: 0%;"></div>`;
             }
 
@@ -474,7 +476,7 @@ window.renderInventory = function() {
             }
             
             slot.addEventListener('pointerdown', (e) => { 
-                e.stopPropagation(); 
+                // e.stopPropagation()を削除し、スワイプを妨げないようにする
                 if (window.isDraggingItem || window.justDropped) return;
                 
                 window.lpStartX = e.clientX; 
@@ -482,10 +484,9 @@ window.renderInventory = function() {
                 window.lastDragX = e.clientX; 
                 window.lastDragY = e.clientY;
 
-                if (invContent) invContent.style.overflowY = 'hidden';
-
                 window.lpTimer = setTimeout(() => {
                     window.lpTimer = null;
+                    if (invContent) invContent.style.overflowY = 'hidden'; // ドラッグ開始時にスクロールをロック
                     window.startInventoryDrag(item, i, currentTabName, rarityColor);
                 }, 300);
             });
@@ -496,14 +497,12 @@ window.renderInventory = function() {
                     if (Math.abs(e.clientX - window.lpStartX) > 10 || Math.abs(e.clientY - window.lpStartY) > 10) {
                         clearTimeout(window.lpTimer); 
                         window.lpTimer = null;
-                        if (invContent) invContent.style.overflowY = 'auto';
                     }
                 }
             });
 
             slot.addEventListener('pointerup', (e) => {
-                e.stopPropagation();
-                if (invContent) invContent.style.overflowY = 'auto';
+                if (invContent) invContent.style.overflowY = 'auto'; // 指を離したらスクロールロック解除
                 if (window.isDraggingItem || window.justDropped) return;
                 
                 if (window.lpTimer) {
@@ -933,4 +932,21 @@ window.stopAutoScroll = function() {
         clearInterval(window.scrollInterval); 
         window.scrollInterval = null; 
     }
+};
+
+// --- アイテム取得のオーバーライド処理 (所持枠いっぱい時のログ追加) ---
+const origAddItemToInventory = window.addItemToInventory;
+window.addItemToInventory = function(item) {
+    const added = origAddItemToInventory ? origAddItemToInventory(item) : false;
+    if (!added) {
+        if (typeof window.addLog === 'function') {
+            window.addLog(`<span class='color-sys'>インベントリがいっぱいで ${item.name} を拾えなかった。</span>`, 'sys');
+        }
+        // スタック防止のためターゲットを解除
+        if (window.player && window.player.targetItem && window.player.targetItem.uid === item.uid) {
+            window.player.targetItem = null;
+            window.playerPath = [];
+        }
+    }
+    return added;
 };

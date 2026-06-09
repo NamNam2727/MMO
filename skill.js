@@ -465,9 +465,7 @@
                         newBuff.effects.push({ type: 'atk_up', value: eff.value, isActive: true });
                         effLogs.push(typeof window.getEffectText === 'function' ? window.getEffectText(eff) : `攻撃倍率${eff.value > 0 ? '+' : ''}${eff.value}%`);
                     } else if (eff.type === 'range_up') {
-                        hasBuff = true;
-                        invalidateOldBuffs('range_up');
-                        newBuff.effects.push({ type: 'range_up', value: eff.value, isActive: true });
+                        // 射程はバフではないためリストに登録しない（表示のみ）
                         effLogs.push(typeof window.getEffectText === 'function' ? window.getEffectText(eff) : `射程${eff.value > 0 ? '+' : ''}${eff.value}`);
                     } else if (eff.type === 'ice') {
                         hasBuff = true;
@@ -496,7 +494,7 @@
                 });
 
                 if (damageMultiplier > 0) {
-                    // ★修正: まりょく(int)依存の場合は MATK を参照してダメージ計算
+                    // まりょく(int)依存の場合は MATK を参照してダメージ計算
                     let baseDamage = window.player.atk;
                     if (dep === 'int') {
                         baseDamage = (window.player.matk !== undefined) ? window.player.matk : Math.floor(window.player.atk * 0.5);
