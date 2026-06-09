@@ -33,6 +33,7 @@ window.addEventListener('pointerdown', (e) => {
         (statWindow && e.target.closest('#statusWindow')) || 
         e.target.closest('#playerWidget') || 
         e.target.closest('#bottomUIContainer') || 
+        e.target.closest('#buffDetailWindow') ||
         e.target.tagName === 'BUTTON' || 
         e.target.tagName === 'SELECT' || 
         e.target.tagName === 'INPUT') return;
@@ -113,11 +114,11 @@ function update(dt, timestamp) {
     if (window.player.attackCooldown > 0) window.player.attackCooldown -= dt;
     
     // 凍結と感電の判定
-    let pIsFrozen = window.player.effects.some(e => e.type === 'ice' && e.duration > 0);
-    let pIsShocked = window.player.effects.some(e => e.type === 'lightning' && e.duration > 0);
+    let pIsFrozen = window.player.effects && window.player.effects.some(e => e.type === 'ice' && e.duration > 0);
+    let pIsShocked = window.player.effects && window.player.effects.some(e => e.type === 'lightning' && e.duration > 0);
     
-    // 凍結中、または攻撃直後のクールダウン中は移動不可
-    let isMovementBlocked = pIsFrozen || window.player.attackCooldown > 0;
+    // ★修正: 凍結中、または攻撃直後のクールダウン中、または【スキル詠唱中】は移動・攻撃不可
+    let isMovementBlocked = pIsFrozen || window.player.attackCooldown > 0 || window.player.castingSkill;
 
     if(typeof window.updateEffects === 'function') window.updateEffects(window.player, dt);
     if(typeof window.updateEnemies === 'function') window.updateEnemies(dt);
@@ -142,79 +143,86 @@ function update(dt, timestamp) {
 
     // 攻撃処理
     if (!pIsFrozen && window.player.targetEnemy && window.player.targetEnemy.state !== 'dead' && window.player.isAutoAttacking) {
-        const distToEnemy = Math.hypot(window.player.targetEnemy.x - window.player.x, window.player.targetEnemy.y - window.player.y);
-        if (distToEnemy <= window.player.attackRange) {
-            shouldMove = false; window.playerPath = []; 
-            if (window.player.attackCooldown <= 0) {
-                const actualDamage = Math.min(window.player.targetEnemy.hp, window.player.atk);
-                window.player.targetEnemy.hp -= actualDamage;
-                window.player.targetEnemy.hasBeenAttacked = true;
-                window.player.targetEnemy.hateTable[window.player.id] = (window.player.targetEnemy.hateTable[window.player.id] || 0) + window.player.atk;
-                window.player.targetEnemy.damageTable[window.player.id] = (window.player.targetEnemy.damageTable[window.player.id] || 0) + actualDamage;
-                
-                // 与ダメージログの出力
-                if (typeof window.addLog === 'function' && typeof window.getEntityName === 'function') {
-                    window.addLog(`${window.getEntityName(window.player)} は ${window.getEntityName(window.player.targetEnemy)} に <span class='color-damage'>${Math.floor(actualDamage)}</span> ダメージを与えた！`, 'damage');
-                }
+        // ★修正: 詠唱中は自動攻撃（通常攻撃）および敵への移動を実行しない。フラグは維持。
+        if (window.player.castingSkill) {
+            shouldMove = false; 
+            window.playerPath = []; 
+        } else {
+            const distToEnemy = Math.hypot(window.player.targetEnemy.x - window.player.x, window.player.targetEnemy.y - window.player.y);
+            if (distToEnemy <= window.player.attackRange) {
+                shouldMove = false; window.playerPath = []; 
+                if (window.player.attackCooldown <= 0) {
+                    const actualDamage = Math.min(window.player.targetEnemy.hp, window.player.atk);
+                    window.player.targetEnemy.hp -= actualDamage;
+                    window.player.targetEnemy.hasBeenAttacked = true;
+                    window.player.targetEnemy.hateTable[window.player.id] = (window.player.targetEnemy.hateTable[window.player.id] || 0) + window.player.atk;
+                    window.player.targetEnemy.damageTable[window.player.id] = (window.player.targetEnemy.damageTable[window.player.id] || 0) + actualDamage;
+                    
+                    if (typeof window.addLog === 'function' && typeof window.getEntityName === 'function') {
+                        window.addLog(`${window.getEntityName(window.player)} は ${window.getEntityName(window.player.targetEnemy)} に <span class='color-damage'>${Math.floor(actualDamage)}</span> ダメージを与えた！`, 'damage');
+                    }
 
-                // 感電時はクールダウン1.5倍
-                let pCdRate = window.player.attackRate; 
-                if (pIsShocked) pCdRate *= 1.5;
-                window.player.attackCooldown = pCdRate; 
-                isMovementBlocked = true; // 攻撃した瞬間から移動不可
-                
-                // 属性攻撃の適用
-                if (window.player.equipped.weapon && window.player.equipped.weapon.element) {
-                    if(typeof window.applyElementEffect === 'function') {
-                        window.applyElementEffect(window.player, window.player.targetEnemy, window.player.equipped.weapon.element, window.player.equipped.weapon.elementParams);
+                    let pCdRate = window.player.attackRate; 
+                    if (pIsShocked) pCdRate *= 1.5;
+                    window.player.attackCooldown = pCdRate; 
+                    isMovementBlocked = true; 
+                    
+                    if (window.player.equipped.weapon && window.player.equipped.weapon.element) {
+                        if(typeof window.applyElementEffect === 'function') {
+                            window.applyElementEffect(window.player, window.player.targetEnemy, window.player.equipped.weapon.element, window.player.equipped.weapon.elementParams);
+                        }
                     }
                 }
-            }
-        } else {
-            if (window.playerPath.length === 0 && typeof window.findPath === 'function') {
-                window.playerPath = window.findPath(window.player.x, window.player.y, window.player.targetEnemy.x, window.player.targetEnemy.y);
+            } else {
+                if (window.playerPath.length === 0 && typeof window.findPath === 'function') {
+                    window.playerPath = window.findPath(window.player.x, window.player.y, window.player.targetEnemy.x, window.player.targetEnemy.y);
+                }
             }
         }
     }
     
     // アイテム回収処理
     if (window.player.targetItem && !pIsFrozen) {
-        const itemIndex = window.droppedItems.findIndex(i => i.uid === window.player.targetItem.uid);
-        if (itemIndex !== -1) {
-            const item = window.droppedItems[itemIndex];
-            if (item.ownerId === null || item.ownerId === window.player.id) {
-                const distToItem = Math.hypot(item.x - window.player.x, item.y - window.player.y);
-                if (distToItem <= window.player.pickupRange) {
-                    shouldMove = false; window.playerPath = [];
-                    const added = window.addItemToInventory(item);
-                    if (added) {
-                        window.droppedItems.splice(itemIndex, 1);
-                        
-                        // ★修正: アイテム取得ログの個数表示の分岐
-                        if (typeof window.addLog === 'function') {
-                            let itemNameDisplay = item.name;
-                            if (item.maxStack > 1) {
-                                itemNameDisplay += ` x ${item.count}`;
+        if (window.player.castingSkill) {
+            shouldMove = false; 
+            window.playerPath = [];
+        } else {
+            const itemIndex = window.droppedItems.findIndex(i => i.uid === window.player.targetItem.uid);
+            if (itemIndex !== -1) {
+                const item = window.droppedItems[itemIndex];
+                if (item.ownerId === null || item.ownerId === window.player.id) {
+                    const distToItem = Math.hypot(item.x - window.player.x, item.y - window.player.y);
+                    if (distToItem <= window.player.pickupRange) {
+                        shouldMove = false; window.playerPath = [];
+                        const added = window.addItemToInventory(item);
+                        if (added) {
+                            window.droppedItems.splice(itemIndex, 1);
+                            
+                            if (typeof window.addLog === 'function') {
+                                let itemNameDisplay = item.name;
+                                if (item.maxStack > 1) {
+                                    itemNameDisplay += ` x ${item.count}`;
+                                }
+                                window.addLog(`<span class='color-item'>${itemNameDisplay}</span> を獲得した！`, 'item');
                             }
-                            window.addLog(`<span class='color-item'>${itemNameDisplay}</span> を獲得した！`, 'item');
+                            
+                            const invWindow = document.getElementById('invWindow');
+                            if (invWindow && invWindow.style.display === 'flex' && typeof window.renderInventory === 'function') {
+                                window.renderInventory();
+                            }
                         }
-                        
-                        const invWindow = document.getElementById('invWindow');
-                        if (invWindow && invWindow.style.display === 'flex' && typeof window.renderInventory === 'function') {
-                            window.renderInventory();
+                        window.player.targetItem = null;
+                    } else {
+                        if (window.playerPath.length === 0 && typeof window.findPath === 'function') {
+                            window.playerPath = window.findPath(window.player.x, window.player.y, item.x, item.y);
                         }
                     }
-                    window.player.targetItem = null;
                 } else {
-                    if (window.playerPath.length === 0 && typeof window.findPath === 'function') {
-                        window.playerPath = window.findPath(window.player.x, window.player.y, item.x, item.y);
-                    }
+                    window.player.targetItem = null; window.playerPath = [];
                 }
             } else {
                 window.player.targetItem = null; window.playerPath = [];
             }
-        } else {
-            window.player.targetItem = null; window.playerPath = [];
         }
     }
 
@@ -279,7 +287,6 @@ function update(dt, timestamp) {
 // 描画処理 (Draw)
 // ==========================================
 
-// 状態異常のアイコン描画関数
 function drawStatusIcons(entity, ctx) {
     if (!entity.effects || entity.effects.length === 0) return;
     const icons = { 'fire':'🔥', 'ice':'🧊', 'lightning':'⚡️', 'wind':'🌪️' };
@@ -311,7 +318,6 @@ function drawStatusIcons(entity, ctx) {
     });
 }
 
-// 状態異常エフェクトの描画関数
 function drawStatusEffects(entity, ctx) {
     if (entity.state === 'dead' || !entity.effects) return;
     let isFrozen = entity.effects.some(e => e.type === 'ice' && e.duration > 0);
@@ -399,7 +405,7 @@ function draw() {
         ctx.fillStyle = 'red'; ctx.fillRect(enemy.x - hpWidth / 2, enemy.y - enemy.radius - 15, hpWidth * hpRatio, hpHeight);
     }
 
-    let pIsFrozen = window.player.effects.some(e => e.type === 'ice' && e.duration > 0);
+    let pIsFrozen = window.player.effects && window.player.effects.some(e => e.type === 'ice' && e.duration > 0);
 
     if (window.playerPath.length > 0 && !pIsFrozen) {
         ctx.beginPath(); ctx.moveTo(window.player.x, window.player.y);

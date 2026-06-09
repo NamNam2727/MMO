@@ -246,7 +246,6 @@
             const chip = window.skillCreateState.baseChip;
             const dep = chip.chipData.dependency;
             
-            // 効果の集計と自動テキスト化
             let totalCost = 0;
             let mergedEffects = {};
             window.skillCreateState.materials.forEach(mat => {
@@ -302,7 +301,6 @@
             const icon = document.getElementById('scIconInput').value.trim();
             const chipItem = window.skillCreateState.baseChip;
             
-            // チップと素材の確実な消費処理
             const itemsToConsume = [chipItem, ...window.skillCreateState.materials];
             itemsToConsume.forEach(mat => {
                 if (!mat) return;
@@ -320,7 +318,6 @@
                 }
             });
 
-            // 完成スキルの効果集計とテキスト化
             let totalCost = 0;
             let mergedEffects = {};
             window.skillCreateState.materials.forEach(mat => {
@@ -337,11 +334,13 @@
             const finalEffects = Object.keys(mergedEffects).map(k => ({ type: k, value: mergedEffects[k] }));
             const effectTexts = finalEffects.map(e => window.getEffectText ? window.getEffectText(e) : `${e.type}+${e.value}`);
 
-            // 新規スキルの生成と格納
+            // ★詠唱・CT表記を削除し、依存を「ちから/まりょく」に修正
+            const depText = chipItem.chipData.dependency === 'str' ? 'ちから' : 'まりょく';
+            
             const newSkill = {
                 id: 'skill_' + Date.now(), uid: 'uid_' + Date.now(), type: 'skill',
                 name: name, icon: icon, rarity: chipItem.rarity, color: chipItem.color, maxStack: 1,
-                desc: `コスト:${totalCost} 依存:${chipItem.chipData.dependency==='str'?'力':'魔'}\n【効果】\n${effectTexts.length > 0 ? effectTexts.map(t=>'・'+t).join('\n') : 'なし'}`,
+                desc: `コスト:${totalCost} 依存:${depText}\n【効果】\n${effectTexts.length > 0 ? effectTexts.map(t=>'・'+t).join('\n') : 'なし'}`,
                 skillData: { cost: totalCost, dependency: chipItem.chipData.dependency, effects: finalEffects }
             };
 
@@ -481,11 +480,10 @@
         } else if (totalCost <= 0 && window.skillCreateState.materials.some(m => m !== null)) {
             errorMsg = '※合計コストは1以上必要です。';
         } else {
-            // ★ マイナス値によるロック判定（バリデーション）
             for (let type in mergedEffects) {
                 let val = mergedEffects[type];
                 if (type === 'atk_up') {
-                    if (100 + val < 0) { // 攻撃倍率は基本100%があるので合算してマイナスなら不可
+                    if (100 + val < 0) { 
                         errorMsg = '※攻撃倍率が0%未満になる組み合わせはできません。';
                         break;
                     }
