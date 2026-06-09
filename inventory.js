@@ -311,7 +311,6 @@ window.initInventoryUI = function() {
                             window.renderInventory();
                         }
                     } else if (scSlot && scSlot.dataset.scIdx !== undefined) {
-                        // ショートカットへの登録処理
                         const scIdx = parseInt(scSlot.dataset.scIdx);
                         const item = window.dragState.item;
                         window.ensureUIDs();
@@ -338,7 +337,6 @@ window.initInventoryUI = function() {
         window.addEventListener('touchend', handleInvDropEnd);
     }
 
-    // ショートカットの初期化関数が読み込まれていれば実行
     if (typeof window.initShortcutUI === 'function') {
         window.initShortcutUI();
     }
@@ -411,6 +409,21 @@ window.compressStacks = function() {
 };
 
 window.renderInventory = function() {
+    // 【修復機能】敵からドロップしたアイテム等、データが欠損している場合にマスターから補完
+    if (window.player && window.player.inventory && window.ITEM_DB) {
+        for (const tab in window.player.inventory) {
+            window.player.inventory[tab].items.forEach(item => {
+                const dbItem = window.ITEM_DB[item.id];
+                if (dbItem) {
+                    if (dbItem.chipData && !item.chipData) item.chipData = JSON.parse(JSON.stringify(dbItem.chipData));
+                    if (dbItem.materialData && !item.materialData) item.materialData = JSON.parse(JSON.stringify(dbItem.materialData));
+                    if (dbItem.skillData && !item.skillData) item.skillData = JSON.parse(JSON.stringify(dbItem.skillData));
+                    if (dbItem.desc && item.desc !== dbItem.desc) item.desc = dbItem.desc;
+                }
+            });
+        }
+    }
+
     window.compressStacks();
 
     if (typeof window.validateSkillMaterials === 'function') {
