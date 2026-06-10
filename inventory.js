@@ -613,8 +613,20 @@ window.toggleInventory = function() {
         if (itemDetail) itemDetail.style.display = 'none';
     } else {
         window.invWindow.style.display = 'flex'; 
-        window.invWindow.style.top = '10%'; 
-        window.invWindow.style.left = '5%';
+        
+        // ★修正: playerWidget の表示位置を取得し、そこから相対的にインベントリを表示
+        const pWidget = document.getElementById('playerWidget');
+        if (pWidget) {
+            const rect = pWidget.getBoundingClientRect();
+            // playerWidgetのTop/Left位置からバフアイコンの位置(+65px, +5px)に合わせて表示
+            window.invWindow.style.top = (rect.top + 65) + 'px';
+            window.invWindow.style.left = (rect.left + 5) + 'px';
+        } else {
+            // 万が一取得できなかった場合のフォールバック（絶対位置）
+            window.invWindow.style.top = '75px'; 
+            window.invWindow.style.left = '15px';
+        }
+
         window.renderInventory();
         setTimeout(window.updateTabIndicator, 10); 
     }
