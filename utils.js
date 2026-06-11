@@ -71,23 +71,26 @@ window.checkCollision = function(circle, rect) {
 
 // --- A* 経路探索アルゴリズム ---
 
-// ★修正: 経路探索のグリッドサイズを画像チップサイズに合わせて 64 に変更
-window.pathGridSize = 64;
+// ★修正: 経路探索のグリッドサイズを画像の半分(32)にし、細かい隙間を通れるようにする
+window.pathGridSize = 32;
 window.pathCols = Math.ceil(window.world.width / window.pathGridSize); 
 window.pathRows = Math.ceil(window.world.height / window.pathGridSize);
 window.pathGrid = [];
 
 // マップのグリッドを構築（初期化時に1回呼ぶ想定）
 window.initPathGrid = function(playerRadius) {
-    const margin = playerRadius + 2; 
+    // 余裕を持たせすぎると引っかかるため、実際の半径に合わせる
+    const margin = playerRadius; 
     for (let y = 0; y < window.pathRows; y++) {
         window.pathGrid[y] = [];
         for (let x = 0; x < window.pathCols; x++) {
             let walkable = true;
-            const gX = x * window.pathGridSize; const gY = y * window.pathGridSize; 
-            const gW = window.pathGridSize; const gH = window.pathGridSize;
+            // ★修正: グリッドの「中心点」を基準に安全確認を行い、誤判定を防ぐ
+            const cx = x * window.pathGridSize + window.pathGridSize / 2; 
+            const cy = y * window.pathGridSize + window.pathGridSize / 2;
+            
             for (const obs of window.obstacles) {
-                if (gX < obs.x + obs.width + margin && gX + gW > obs.x - margin && gY < obs.y + obs.height + margin && gY + gH > obs.y - margin) {
+                if (cx < obs.x + obs.width + margin && cx > obs.x - margin && cy < obs.y + obs.height + margin && cy > obs.y - margin) {
                     walkable = false; break;
                 }
             }
@@ -112,7 +115,10 @@ window.findPath = function(startX, startY, endX, endY, charRadius = 15) {
     
     let closestNode = nodes[startKey]; let minHeuristic = nodes[startKey].h;
     const neighbors = [{x: 0, y: -1}, {x: 0, y: 1}, {x: -1, y: 0}, {x: 1, y: 0}, {x: -1, y: -1}, {x: 1, y: -1}, {x: -1, y: 1}, {x: 1, y: 1}];
-    let loopCount = 0; const maxLoops = 2000;
+    
+    let loopCount = 0; 
+    // ★修正: グリッドを半分にしたためマス目が4倍に増える。長距離探索が途切れないようループ上限を引き上げ
+    const maxLoops = 4000;
 
     while (openList.length > 0 && loopCount < maxLoops) {
         loopCount++;
