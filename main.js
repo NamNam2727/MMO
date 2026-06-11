@@ -18,6 +18,25 @@ window.addEventListener('contextmenu', (e) => {
     e.preventDefault();
 });
 
+// ==========================================
+// ★ 画面スクロールのスマート抑制処理 (追加)
+// ==========================================
+document.addEventListener('touchmove', function(e) {
+    // アイテムをドラッグ中なら、どんな場合でもスクロールを完全に止める
+    if (window.isDraggingItem) {
+        e.preventDefault();
+        return;
+    }
+
+    // スクロールを許可したい要素（インベントリの中身、ステータス画面、ログなど）
+    const isScrollable = e.target.closest('#invContent, #statusWindow, #fullLogContent, #chatLogContent, #debug-console');
+    
+    // スクロール可能な要素以外をスワイプした時は、画面全体が動かないようにする
+    if (!isScrollable) {
+        e.preventDefault();
+    }
+}, { passive: false });
+
 // --- 入力イベント (タップ/長押し) ---
 window.addEventListener('pointerdown', (e) => {
     const itemDetail = document.getElementById('itemDetail');
@@ -51,6 +70,7 @@ function handlePointerUp(e) {
     if (window.isScDragging) return; 
     if (input.isDown) {
         const currentTime = performance.now();
+        // タップ(200ms未満)とみなした場合のみターゲット選択
         if (currentTime - pointerDownTime < 200) {
             const targetX = input.screenX + window.camera.x; 
             const targetY = input.screenY + window.camera.y;
@@ -117,7 +137,7 @@ function update(dt, timestamp) {
     let pIsFrozen = window.player.effects && window.player.effects.some(e => e.type === 'ice' && e.duration > 0);
     let pIsShocked = window.player.effects && window.player.effects.some(e => e.type === 'lightning' && e.duration > 0);
     
-    // ★修正: 凍結中、または攻撃直後のクールダウン中、または【スキル詠唱中】は移動・攻撃不可
+    // 凍結中、または攻撃直後のクールダウン中、または【スキル詠唱中】は移動・攻撃不可
     let isMovementBlocked = pIsFrozen || window.player.attackCooldown > 0 || window.player.castingSkill;
 
     if(typeof window.updateEffects === 'function') window.updateEffects(window.player, dt);
@@ -143,7 +163,6 @@ function update(dt, timestamp) {
 
     // 攻撃処理
     if (!pIsFrozen && window.player.targetEnemy && window.player.targetEnemy.state !== 'dead' && window.player.isAutoAttacking) {
-        // ★修正: 詠唱中は自動攻撃（通常攻撃）および敵への移動を実行しない。フラグは維持。
         if (window.player.castingSkill) {
             shouldMove = false; 
             window.playerPath = []; 
