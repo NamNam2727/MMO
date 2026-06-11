@@ -71,7 +71,7 @@ window.checkCollision = function(circle, rect) {
 
 // --- A* 経路探索アルゴリズム ---
 
-// ★修正: 経路探索のグリッドサイズを画像の半分(32)にし、細かい隙間を通れるようにする
+// 経路探索のグリッドサイズを画像の半分(32)にし、細かい隙間を通れるようにする
 window.pathGridSize = 32;
 window.pathCols = Math.ceil(window.world.width / window.pathGridSize); 
 window.pathRows = Math.ceil(window.world.height / window.pathGridSize);
@@ -85,7 +85,7 @@ window.initPathGrid = function(playerRadius) {
         window.pathGrid[y] = [];
         for (let x = 0; x < window.pathCols; x++) {
             let walkable = true;
-            // ★修正: グリッドの「中心点」を基準に安全確認を行い、誤判定を防ぐ
+            // グリッドの「中心点」を基準に安全確認を行い、誤判定を防ぐ
             const cx = x * window.pathGridSize + window.pathGridSize / 2; 
             const cy = y * window.pathGridSize + window.pathGridSize / 2;
             
@@ -117,7 +117,7 @@ window.findPath = function(startX, startY, endX, endY, charRadius = 15) {
     const neighbors = [{x: 0, y: -1}, {x: 0, y: 1}, {x: -1, y: 0}, {x: 1, y: 0}, {x: -1, y: -1}, {x: 1, y: -1}, {x: -1, y: 1}, {x: 1, y: 1}];
     
     let loopCount = 0; 
-    // ★修正: グリッドを半分にしたためマス目が4倍に増える。長距離探索が途切れないようループ上限を引き上げ
+    // グリッドを半分にしたためマス目が4倍に増える。長距離探索が途切れないようループ上限を引き上げ
     const maxLoops = 4000;
 
     while (openList.length > 0 && loopCount < maxLoops) {
@@ -133,8 +133,14 @@ window.findPath = function(startX, startY, endX, endY, charRadius = 15) {
             const nx = current.x + dir.x; const ny = current.y + dir.y;
             if (nx < 0 || nx >= window.pathCols || ny < 0 || ny >= window.pathRows) continue;
             const nKey = `${nx},${ny}`;
-            if (closedList.has(nKey)) continue; if (!window.pathGrid[ny][nx]) continue;
-            if (dir.x !== 0 && dir.y !== 0) { if (!window.pathGrid[current.y][nx] && !window.pathGrid[ny][current.x]) continue; }
+            if (closedList.has(nKey)) continue; 
+            if (!window.pathGrid[ny][nx]) continue;
+            
+            // ★修正: 斜め移動時、隣接する直交マスの「どちらか片方」でも壁なら斜め移動不可にする（角抜け禁止）
+            if (dir.x !== 0 && dir.y !== 0) { 
+                if (!window.pathGrid[current.y][nx] || !window.pathGrid[ny][current.x]) continue; 
+            }
+            
             const gCost = current.g + (dir.x === 0 || dir.y === 0 ? 1 : 1.414);
             let neighbor = nodes[nKey];
             if (!neighbor) {
