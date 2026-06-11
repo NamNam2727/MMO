@@ -6,22 +6,23 @@
 // アセット管理（将来的にBase64画像等を格納）
 window.ASSETS = { player: null, enemy: null, item: null };
 
-// マップサイズ
-window.world = { width: 2000, height: 2000 };
+// ★修正: マップサイズを64の倍数（32マス×32マス）に変更し、チップを敷き詰めやすくする
+window.world = { width: 2048, height: 2048 };
 
 // カメラ初期設定
 window.camera = { x: 0, y: 0, width: 0, height: 0, deadZoneX: 0, deadZoneY: 0 };
 
-// 障害物（壁）の定義
+// ★修正: 障害物（壁）の座標とサイズを「64の倍数」に合わせ、グリッドにピッタリ収まるように調整
+// ※中央座標(1024, 1024)を基準に配置
 window.obstacles = [
-    { x: window.world.width / 2 + 100, y: window.world.height / 2 - 50, width: 200, height: 100, color: '#228B22' },
-    { x: window.world.width / 2 - 200, y: window.world.height / 2 + 100, width: 100, height: 300, color: '#228B22' },
-    { x: window.world.width / 2 - 100, y: window.world.height / 2 - 200, width: 300, height: 50, color: '#228B22' }
+    { x: 1152, y: 960, width: 192, height: 128, color: '#228B22' }, // 右上の壁 (3x2マス)
+    { x: 832,  y: 1152, width: 128, height: 256, color: '#228B22' }, // 左下の壁 (2x4マス)
+    { x: 960,  y: 832, width: 256, height: 64,  color: '#228B22' }  // 上の壁 (4x1マス)
 ];
 
 // アイテム関連のグローバル変数
 window.FREE_LOOT_TIME = 300; 
-window.droppedItems = []; // ★追加: フィールド上のドロップアイテムを管理する配列
+window.droppedItems = []; // フィールド上のドロップアイテムを管理する配列
 
 // =========================================================
 // Canvasとリサイズ処理

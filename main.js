@@ -366,7 +366,8 @@ function draw() {
     ctx.clearRect(0, 0, window.canvas.width, window.canvas.height);
     ctx.save(); ctx.translate(-window.camera.x, -window.camera.y);
 
-    ctx.strokeStyle = '#333'; ctx.lineWidth = 1; const gridSize = 50;
+    // ★修正: 描画グリッドサイズを64に変更
+    ctx.strokeStyle = '#333'; ctx.lineWidth = 1; const gridSize = 64;
     const startX = Math.max(0, Math.floor(window.camera.x / gridSize) * gridSize); const startY = Math.max(0, Math.floor(window.camera.y / gridSize) * gridSize);
     const endX = Math.min(window.world.width, startX + window.camera.width + gridSize); const endY = Math.min(window.world.height, startY + window.camera.height + gridSize);
     ctx.beginPath();

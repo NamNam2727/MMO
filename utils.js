@@ -71,7 +71,8 @@ window.checkCollision = function(circle, rect) {
 
 // --- A* 経路探索アルゴリズム ---
 
-window.pathGridSize = 40;
+// ★修正: 経路探索のグリッドサイズを画像チップサイズに合わせて 64 に変更
+window.pathGridSize = 64;
 window.pathCols = Math.ceil(window.world.width / window.pathGridSize); 
 window.pathRows = Math.ceil(window.world.height / window.pathGridSize);
 window.pathGrid = [];
