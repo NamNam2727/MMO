@@ -266,6 +266,9 @@ window.initUI = function() {
         });
     });
 
+    // =========================================================
+    // ★ マルチプレイチャット送信機能
+    // =========================================================
     const chatSendBtn = document.getElementById('chatSendBtn');
     if (chatSendBtn) {
         chatSendBtn.addEventListener('pointerdown', (e) => {
@@ -273,7 +276,25 @@ window.initUI = function() {
             const input = document.getElementById('chatInput');
             const text = input.value.trim();
             if (text) {
-                window.addLog(`<span class='color-player'>プレイヤー:</span> ${text}`, 'chat');
+                // UIから自分の名前を取得（未設定なら「プレイヤー」）
+                let myName = 'プレイヤー';
+                const nameElem = document.getElementById('uiPlayerName');
+                if (nameElem && nameElem.innerText && nameElem.innerText !== 'Player Name') {
+                    myName = nameElem.innerText;
+                }
+
+                // 自分の画面に表示
+                window.addLog(`<span class='color-player'>${myName}:</span> ${text}`, 'chat');
+                
+                // マルチプレイ通信で他プレイヤーに送信 (dataType 'chat' で識別)
+                if (window.Multiplayer && typeof window.Multiplayer.sendData === 'function') {
+                    window.Multiplayer.sendData({
+                        dataType: 'chat',
+                        senderName: myName,
+                        text: text
+                    });
+                }
+
                 input.value = '';
             }
         });
@@ -313,7 +334,7 @@ window.initUI = function() {
         } else if (w) { 
             window.updateStatusUI(); 
             
-            // ★修正: playerWidget の表示位置を取得し、相対的にステータスのTopを合わせる
+            // playerWidget の表示位置を取得し、相対的にステータスのTopを合わせる
             const pWidget = document.getElementById('playerWidget');
             if (pWidget) {
                 const rect = pWidget.getBoundingClientRect();
@@ -368,5 +389,24 @@ window.initUI = function() {
     // インベントリUIの初期化を分離した外部JS(inventory.js)から呼び出す
     if(typeof window.initInventoryUI === 'function') {
         window.initInventoryUI();
+    }
+
+    // =========================================================
+    // ★ マルチプレイチャット受信機能の登録
+    // =========================================================
+    if (window.Multiplayer) {
+        const prevOnReceive = window.Multiplayer.onReceiveData;
+        
+        window.Multiplayer.onReceiveData = (data, userId) => {
+            // 既存の受信処理（キャラクター移動など）があればそれを実行
+            if (prevOnReceive) prevOnReceive(data, userId);
+            
+            // チャットデータを受信した場合のみログに表示
+            if (data && data.dataType === 'chat') {
+                const senderName = data.senderName || 'プレイヤー';
+                // 相手からの発言なので色を変えて表示（明るい緑色）
+                window.addLog(`<span style="color: #aaffaa;">${senderName}:</span> ${data.text}`, 'chat');
+            }
+        };
     }
 };
