@@ -312,6 +312,14 @@ window.initUI = function() {
             window.tempStats = {str:0, int:0, vit:0};
         } else if (w) { 
             window.updateStatusUI(); 
+            
+            // ★修正: playerWidget の表示位置を取得し、相対的にステータスのTopを合わせる
+            const pWidget = document.getElementById('playerWidget');
+            if (pWidget) {
+                const rect = pWidget.getBoundingClientRect();
+                w.style.top = rect.top + 'px';
+            }
+            
             w.style.display = 'flex'; 
         }
     }, { passive: true }); // stopPropagationを外し、自然に処理させる
