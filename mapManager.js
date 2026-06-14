@@ -4,6 +4,9 @@
 // =========================================================
 
 window.MapManager = {
+    // ★追加: GitHubの絶対パス（ルートURL）を定義
+    baseURL: 'https://namnam2727.github.io/MMO/',
+    
     currentMapId: null,
     
     // =====================================================
@@ -54,15 +57,17 @@ window.MapManager = {
     // =====================================================
     loadScript: function(url, callback) {
         const script = document.createElement('script');
-        // ブラウザのキャッシュ対策（開発時用）
-        script.src = url + '?v=' + new Date().getTime(); 
+        
+        // ★修正: baseURLを付与して「絶対パス」として読み込むように変更
+        const absoluteUrl = this.baseURL + url;
+        script.src = absoluteUrl + '?v=' + new Date().getTime(); 
         
         script.onload = () => {
             if (callback) callback();
         };
         
         script.onerror = () => {
-            console.error('Failed to load script: ' + url);
+            console.error('Failed to load script: ' + absoluteUrl);
             if (typeof window.addLog === 'function') window.addLog("<span class='color-sys'>マップデータの読み込みに失敗しました。</span>", 'sys');
         };
         
@@ -103,7 +108,7 @@ window.MapManager = {
                             y: y * GRID_SIZE,
                             width: GRID_SIZE,
                             height: GRID_SIZE,
-                            // ★ 本番用に壁を透明にして見えなくします（画像のみが見える状態）
+                            // 本番用に壁を透明にして見えなくします（画像のみが見える状態）
                             color: 'transparent'
                         });
                     }
