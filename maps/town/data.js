@@ -5,7 +5,7 @@
 
 window.MapManager.mapDataStore['town'] = {
     // 背景画像のURL
-    bgImage: 'https://cdn.gravity.place/aiugc/game/material/2026-06-13/2139cfb1-8176-4439-bf83-c698acd107ed.jpeg',
+    bgImage: 'https://namnam2727.github.io/MMO/maps/town/pic.PNG',
     
     // 当たり判定マップ (0: 床, 1: 壁, 4: 初期スポーン地点)
     collisionMap: [
