@@ -22,16 +22,11 @@ window.addEventListener('contextmenu', (e) => {
 // ★ 画面スクロールのスマート抑制処理 (追加)
 // ==========================================
 document.addEventListener('touchmove', function(e) {
-    // アイテムをドラッグ中なら、どんな場合でもスクロールを完全に止める
     if (window.isDraggingItem) {
         e.preventDefault();
         return;
     }
-
-    // スクロールを許可したい要素（インベントリの中身、ステータス画面、ログなど）
     const isScrollable = e.target.closest('#invContent, #statusWindow, #fullLogContent, #chatLogContent, #debug-console');
-    
-    // スクロール可能な要素以外をスワイプした時は、画面全体が動かないようにする
     if (!isScrollable) {
         e.preventDefault();
     }
@@ -46,7 +41,6 @@ window.addEventListener('pointerdown', (e) => {
     if (itemDetail && itemDetail.style.display === 'flex' && !itemDetail.contains(e.target) && !e.target.closest('.inv-slot')) {
         itemDetail.style.display = 'none';
     }
-    // UIをタップした場合は移動キャンセル
     if ((invWindow && e.target.closest('#invWindow')) || 
         (itemDetail && e.target.closest('#itemDetail')) || 
         (statWindow && e.target.closest('#statusWindow')) || 
@@ -70,7 +64,6 @@ function handlePointerUp(e) {
     if (window.isScDragging) return; 
     if (input.isDown) {
         const currentTime = performance.now();
-        // タップ(200ms未満)とみなした場合のみターゲット選択
         if (currentTime - pointerDownTime < 200) {
             const targetX = input.screenX + window.camera.x; 
             const targetY = input.screenY + window.camera.y;
@@ -126,18 +119,15 @@ window.addEventListener('pointerup', handlePointerUp);
 window.addEventListener('pointercancel', handlePointerUp); 
 window.addEventListener('pointerout', handlePointerUp);
 
-
 // ==========================================
 // 更新処理 (Update)
 // ==========================================
 function update(dt, timestamp) {
     if (window.player.attackCooldown > 0) window.player.attackCooldown -= dt;
     
-    // 凍結と感電の判定
     let pIsFrozen = window.player.effects && window.player.effects.some(e => e.type === 'ice' && e.duration > 0);
     let pIsShocked = window.player.effects && window.player.effects.some(e => e.type === 'lightning' && e.duration > 0);
     
-    // 凍結中、または攻撃直後のクールダウン中、または【スキル詠唱中】は移動・攻撃不可
     let isMovementBlocked = pIsFrozen || window.player.attackCooldown > 0 || window.player.castingSkill;
 
     if(typeof window.updateEffects === 'function') window.updateEffects(window.player, dt);
@@ -156,10 +146,7 @@ function update(dt, timestamp) {
     }
 
     let shouldMove = true;
-    
-    if (pIsFrozen) {
-        shouldMove = false; 
-    }
+    if (pIsFrozen) shouldMove = false; 
 
     // 攻撃処理
     if (!pIsFrozen && window.player.targetEnemy && window.player.targetEnemy.state !== 'dead' && window.player.isAutoAttacking) {
@@ -187,9 +174,7 @@ function update(dt, timestamp) {
                     isMovementBlocked = true; 
                     
                     if (window.player.equipped.weapon && window.player.equipped.weapon.element) {
-                        if(typeof window.applyElementEffect === 'function') {
-                            window.applyElementEffect(window.player, window.player.targetEnemy, window.player.equipped.weapon.element, window.player.equipped.weapon.elementParams);
-                        }
+                        if(typeof window.applyElementEffect === 'function') window.applyElementEffect(window.player, window.player.targetEnemy, window.player.equipped.weapon.element, window.player.equipped.weapon.elementParams);
                     }
                 }
             } else {
@@ -219,16 +204,12 @@ function update(dt, timestamp) {
                             
                             if (typeof window.addLog === 'function') {
                                 let itemNameDisplay = item.name;
-                                if (item.maxStack > 1) {
-                                    itemNameDisplay += ` x ${item.count}`;
-                                }
+                                if (item.maxStack > 1) itemNameDisplay += ` x ${item.count}`;
                                 window.addLog(`<span class='color-item'>${itemNameDisplay}</span> を獲得した！`, 'item');
                             }
                             
                             const invWindow = document.getElementById('invWindow');
-                            if (invWindow && invWindow.style.display === 'flex' && typeof window.renderInventory === 'function') {
-                                window.renderInventory();
-                            }
+                            if (invWindow && invWindow.style.display === 'flex' && typeof window.renderInventory === 'function') window.renderInventory();
                         }
                         window.player.targetItem = null;
                     } else {
@@ -366,20 +347,34 @@ function draw() {
     ctx.clearRect(0, 0, window.canvas.width, window.canvas.height);
     ctx.save(); ctx.translate(-window.camera.x, -window.camera.y);
 
-    // ★修正: 描画グリッドサイズを64に変更
-    ctx.strokeStyle = '#333'; ctx.lineWidth = 1; const gridSize = 64;
-    const startX = Math.max(0, Math.floor(window.camera.x / gridSize) * gridSize); const startY = Math.max(0, Math.floor(window.camera.y / gridSize) * gridSize);
-    const endX = Math.min(window.world.width, startX + window.camera.width + gridSize); const endY = Math.min(window.world.height, startY + window.camera.height + gridSize);
-    ctx.beginPath();
-    for(let x = startX; x <= endX; x += gridSize) { ctx.moveTo(x, startY); ctx.lineTo(x, endY); }
-    for(let y = startY; y <= endY; y += gridSize) { ctx.moveTo(startX, y); ctx.lineTo(endX, y); }
-    ctx.stroke();
+    // ★ 背景画像の描画（最背面）
+    if (window.currentBackgroundImage && window.currentBackgroundImage.complete) {
+        ctx.drawImage(window.currentBackgroundImage, 0, 0, window.world.width, window.world.height);
+    } else {
+        // 画像がない、またはロード中は仮のグリッド線を描画
+        ctx.strokeStyle = '#333'; ctx.lineWidth = 1; const gridSize = 32;
+        const startX = Math.max(0, Math.floor(window.camera.x / gridSize) * gridSize); const startY = Math.max(0, Math.floor(window.camera.y / gridSize) * gridSize);
+        const endX = Math.min(window.world.width, startX + window.camera.width + gridSize); const endY = Math.min(window.world.height, startY + window.camera.height + gridSize);
+        ctx.beginPath();
+        for(let x = startX; x <= endX; x += gridSize) { ctx.moveTo(x, startY); ctx.lineTo(x, endY); }
+        for(let y = startY; y <= endY; y += gridSize) { ctx.moveTo(startX, y); ctx.lineTo(endX, y); }
+        ctx.stroke();
+    }
 
+    // 枠線の描画
     ctx.strokeStyle = '#ff0000'; ctx.lineWidth = 4; ctx.strokeRect(0, 0, window.world.width, window.world.height);
 
+    // ★ 障害物の描画 (透明でない場合やデバッグモード時のみ描画するよう変更)
+    const DEBUG_DRAW_WALLS = false; // trueにすると壁の当たり判定が赤く可視化されます
     for (const obs of window.obstacles) {
-        ctx.fillStyle = obs.color; ctx.fillRect(obs.x, obs.y, obs.width, obs.height);
-        ctx.strokeStyle = '#114a11'; ctx.lineWidth = 2; ctx.strokeRect(obs.x, obs.y, obs.width, obs.height);
+        if (DEBUG_DRAW_WALLS || obs.color !== 'transparent') {
+            ctx.fillStyle = DEBUG_DRAW_WALLS ? 'rgba(255, 0, 0, 0.3)' : obs.color;
+            ctx.fillRect(obs.x, obs.y, obs.width, obs.height);
+            // デバッグ時のみ枠線を描く
+            if (DEBUG_DRAW_WALLS) {
+                ctx.strokeStyle = 'red'; ctx.lineWidth = 1; ctx.strokeRect(obs.x, obs.y, obs.width, obs.height);
+            }
+        }
     }
 
     for (const item of window.droppedItems) {
