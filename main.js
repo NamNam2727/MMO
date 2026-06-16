@@ -26,7 +26,7 @@ document.addEventListener('touchmove', function(e) {
         e.preventDefault();
         return;
     }
-    const isScrollable = e.target.closest('#invContent, #statusWindow, #fullLogContent, #chatLogContent, #debug-console');
+    const isScrollable = e.target.closest('#invContent, #statusWindow, #fullLogContent, #chatLogContent, #debug-console, #partyListWindow, #otherPlayerStatusWindow');
     if (!isScrollable) {
         e.preventDefault();
     }
@@ -47,6 +47,8 @@ window.addEventListener('pointerdown', (e) => {
         e.target.closest('#playerWidget') || 
         e.target.closest('#bottomUIContainer') || 
         e.target.closest('#buffDetailWindow') ||
+        e.target.closest('#partyListWindow') ||
+        e.target.closest('#otherPlayerStatusWindow') ||
         e.target.tagName === 'BUTTON' || 
         e.target.tagName === 'SELECT' || 
         e.target.tagName === 'INPUT') return;
@@ -123,7 +125,6 @@ window.addEventListener('pointerout', handlePointerUp);
 // ★ アバター画像の読み込み管理
 // ==========================================
 function loadAvatarImages() {
-    // HTML側で設定した window.GameState から情報を取得
     if (window.GameState && window.GameState.userInfo) {
         const myUrl = window.GameState.userInfo.portrait || window.GameState.userInfo.portait;
         if (myUrl && !window.playerAvatarImage) {
@@ -138,7 +139,12 @@ function loadAvatarImages() {
 // 更新処理 (Update)
 // ==========================================
 function update(dt, timestamp) {
-    loadAvatarImages(); // 毎フレームチェックして、まだなければ画像を読み込む
+    loadAvatarImages(); 
+
+    // ★追加: マルチプレイヤーの更新処理（自キャラ位置の送信＆他キャラの補間移動）
+    if (window.MultiplayerManager) {
+        window.MultiplayerManager.update(dt, timestamp);
+    }
 
     if (window.player.attackCooldown > 0) window.player.attackCooldown -= dt;
     
@@ -243,12 +249,10 @@ function update(dt, timestamp) {
         }
     }
 
-    // 感電中は移動速度半減
     let currentSpeed = window.player.speed;
     if (pIsShocked) currentSpeed *= 0.5;
     const moveDistance = currentSpeed * dt;
 
-    // 硬直中でなければ移動を適用
     if (!isMovementBlocked && shouldMove) {
         if (input.isDown) {
             window.player.targetX = input.screenX + window.camera.x; window.player.targetY = input.screenY + window.camera.y;
@@ -449,8 +453,56 @@ function draw() {
         ctx.beginPath(); ctx.arc(window.player.targetX, window.player.targetY, 5, 0, Math.PI * 2); ctx.fillStyle = 'rgba(255, 255, 255, 0.5)'; ctx.fill();
     }
 
+
     // ==========================================
-    // ★ プレイヤーの描画（アバター画像対応）
+    // ★ 他プレイヤーの描画 (マルチプレイ対応)
+    // ==========================================
+    if (window.MultiplayerManager) {
+        for (const id in window.MultiplayerManager.otherPlayers) {
+            const p = window.MultiplayerManager.otherPlayers[id];
+            
+            // 座標データが未達、または初期状態のままならスキップ
+            if (p.x === undefined || p.y === undefined || (p.x === 0 && p.y === 0)) continue;
+
+            const radius = window.player.radius || 15;
+
+            ctx.beginPath(); 
+            ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
+            
+            // アバター画像がある場合は丸く切り抜いて描画
+            if (p.image && p.image.complete && p.image.naturalWidth > 0) {
+                ctx.save();
+                ctx.clip(); 
+                ctx.drawImage(p.image, p.x - radius, p.y - radius, radius * 2, radius * 2);
+                
+                if (p.isAttacking) {
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+                    ctx.fill();
+                }
+                ctx.restore();
+                
+                ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke();
+            } else {
+                // 画像がない場合の代替描画
+                ctx.fillStyle = p.isAttacking ? '#ffffff' : '#00aaaa';
+                ctx.fill(); 
+                ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke();
+            }
+
+            // 名前の表示
+            ctx.fillStyle = 'white';
+            ctx.font = '10px sans-serif';
+            ctx.textAlign = 'center';
+            // 縁取りをつけて見やすくする
+            ctx.lineWidth = 2;
+            ctx.strokeStyle = 'black';
+            ctx.strokeText(p.name, p.x, p.y - radius - 5);
+            ctx.fillText(p.name, p.x, p.y - radius - 5);
+        }
+    }
+
+    // ==========================================
+    // ★ 自分のプレイヤーの描画（アバター画像対応）
     // ==========================================
     ctx.beginPath(); 
     ctx.arc(window.player.x, window.player.y, window.player.radius, 0, Math.PI * 2);
@@ -458,22 +510,18 @@ function draw() {
     const isAttackingFlash = (window.player.attackCooldown > window.player.attackRate - 0.1 && window.player.targetEnemy && window.player.isAutoAttacking && !pIsFrozen);
     
     if (window.playerAvatarImage && window.playerAvatarImage.complete && window.playerAvatarImage.naturalWidth > 0) {
-        // 画像がロードできている場合は、円形に切り抜いて描画
         ctx.save();
         ctx.clip(); 
         ctx.drawImage(window.playerAvatarImage, window.player.x - window.player.radius, window.player.y - window.player.radius, window.player.radius * 2, window.player.radius * 2);
         
-        // 攻撃時の白フラッシュ
         if (isAttackingFlash) {
             ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
             ctx.fill();
         }
         ctx.restore();
         
-        // 外枠
         ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke();
     } else {
-        // 画像がない、またはロード中の場合は従来の色付き円を描画
         ctx.fillStyle = isAttackingFlash ? '#ffffff' : window.player.color;
         ctx.fill(); 
         ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke();

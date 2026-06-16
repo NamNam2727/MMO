@@ -19,7 +19,8 @@
         'ui.js',           
         'skill_create.js', 
         'skill.js',        
-        'main.js'
+        'multiplayer.js',  // ★追加: 通信ロジックと他プレイヤー管理
+        'main.js'          // 最後にメインループ
     ];
 
     let loadedCount = 0;
