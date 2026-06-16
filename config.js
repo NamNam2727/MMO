@@ -20,22 +20,37 @@ window.FREE_LOOT_TIME = 300;
 window.droppedItems = []; // フィールド上のドロップアイテムを管理する配列
 
 // =========================================================
-// Canvasとリサイズ処理
-// (Loader等でDOM構築後に呼ばれる前提)
+// Canvasとリサイズ処理 (高画質対応)
 // =========================================================
 window.canvas = document.getElementById('gameCanvas');
 window.ctx = window.canvas ? window.canvas.getContext('2d') : null;
 
 window.resizeCanvas = function() {
     if (!window.canvas) return;
-    window.canvas.width = window.innerWidth;
-    window.canvas.height = window.innerHeight;
     
-    window.camera.width = window.canvas.width;
-    window.camera.height = window.canvas.height;
+    // 端末のディスプレイ解像度（DPR）を取得。取得できなければ通常の 1
+    const dpr = window.devicePixelRatio || 1;
+    
+    // Canvasの「見た目のサイズ（CSS）」を画面いっぱいに設定
+    window.canvas.style.width = window.innerWidth + 'px';
+    window.canvas.style.height = window.innerHeight + 'px';
+    
+    // Canvasの「実際の解像度」をDPRの分だけ引き上げる（ぼやけ解消の要）
+    window.canvas.width = window.innerWidth * dpr;
+    window.canvas.height = window.innerHeight * dpr;
+    
+    // 描画する際もDPRに合わせてスケールを拡大する
+    if (window.ctx) {
+        window.ctx.scale(dpr, dpr);
+    }
+    
+    // カメラの計算サイズは「見た目のサイズ」で扱う
+    window.camera.width = window.innerWidth;
+    window.camera.height = window.innerHeight;
+    
     // 遊び（デッドゾーン）は画面サイズの10%
-    window.camera.deadZoneX = window.canvas.width * 0.1;
-    window.camera.deadZoneY = window.canvas.height * 0.1;
+    window.camera.deadZoneX = window.innerWidth * 0.1;
+    window.camera.deadZoneY = window.innerHeight * 0.1;
 };
 
 window.addEventListener('resize', window.resizeCanvas);
