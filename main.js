@@ -141,12 +141,14 @@ function loadAvatarImages() {
 function update(dt, timestamp) {
     loadAvatarImages(); 
 
-    // ★追加: マルチプレイヤーの更新処理（自キャラ位置の送信＆他キャラの補間移動）
     if (window.MultiplayerManager) {
         window.MultiplayerManager.update(dt, timestamp);
     }
 
     if (window.player.attackCooldown > 0) window.player.attackCooldown -= dt;
+    
+    // ★追加: 自分のチャット吹き出しの表示タイマーを減算
+    if (window.player.chatTimer > 0) window.player.chatTimer -= dt;
     
     let pIsFrozen = window.player.effects && window.player.effects.some(e => e.type === 'ice' && e.duration > 0);
     let pIsShocked = window.player.effects && window.player.effects.some(e => e.type === 'lightning' && e.duration > 0);
@@ -362,6 +364,60 @@ function drawStatusEffects(entity, ctx) {
     drawStatusIcons(entity, ctx);
 }
 
+// ★追加: チャット吹き出しを描画する関数
+function drawChatBubble(ctx, x, y, text) {
+    if (!text) return;
+    ctx.save();
+    ctx.font = 'bold 12px sans-serif';
+    
+    // 文字の幅を測る
+    const metrics = ctx.measureText(text);
+    const textWidth = metrics.width;
+    const padding = 8;
+    const boxWidth = textWidth + padding * 2;
+    const boxHeight = 24;
+    
+    // キャラクターの頭上に来るようY座標を少し上げる
+    const boxY = y - 45; 
+    const boxX = x - boxWidth / 2;
+
+    // 吹き出しの背景設定
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 1;
+    
+    // 吹き出しの形を描く（角丸矩形 ＋ 下向きのしっぽ）
+    const radius = 6;
+    ctx.beginPath();
+    ctx.moveTo(boxX + radius, boxY);
+    ctx.lineTo(boxX + boxWidth - radius, boxY);
+    ctx.quadraticCurveTo(boxX + boxWidth, boxY, boxX + boxWidth, boxY + radius);
+    ctx.lineTo(boxX + boxWidth, boxY + boxHeight - radius);
+    ctx.quadraticCurveTo(boxX + boxWidth, boxY + boxHeight, boxX + boxWidth - radius, boxY + boxHeight);
+    
+    // しっぽ部分
+    ctx.lineTo(x + 5, boxY + boxHeight);
+    ctx.lineTo(x, boxY + boxHeight + 8);
+    ctx.lineTo(x - 5, boxY + boxHeight);
+    
+    ctx.lineTo(boxX + radius, boxY + boxHeight);
+    ctx.quadraticCurveTo(boxX, boxY + boxHeight, boxX, boxY + boxHeight - radius);
+    ctx.lineTo(boxX, boxY + radius);
+    ctx.quadraticCurveTo(boxX, boxY, boxX + radius, boxY);
+    ctx.closePath();
+    
+    ctx.fill();
+    ctx.stroke();
+
+    // テキストの描画
+    ctx.fillStyle = '#000';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(text, x, boxY + boxHeight / 2);
+    
+    ctx.restore();
+}
+
 function draw() {
     if(!window.ctx) return;
     const ctx = window.ctx;
@@ -498,6 +554,11 @@ function draw() {
             ctx.strokeStyle = 'black';
             ctx.strokeText(p.name, p.x, p.y - radius - 5);
             ctx.fillText(p.name, p.x, p.y - radius - 5);
+            
+            // ★追加: 他プレイヤーのチャット吹き出し表示
+            if (p.chatTimer > 0) {
+                drawChatBubble(ctx, p.x, p.y - radius, p.chatMessage);
+            }
         }
     }
 
@@ -532,6 +593,11 @@ function draw() {
     const phpWidth = 40; const phpHeight = 6; const phpRatio = window.player.hp / window.player.maxHp;
     ctx.fillStyle = 'black'; ctx.fillRect(window.player.x - phpWidth / 2, window.player.y - window.player.radius - 15, phpWidth, phpHeight);
     ctx.fillStyle = '#00ff00'; ctx.fillRect(window.player.x - phpWidth / 2, window.player.y - window.player.radius - 15, phpWidth * phpRatio, phpHeight);
+
+    // ★追加: 自分のチャット吹き出し表示
+    if (window.player.chatTimer > 0) {
+        drawChatBubble(ctx, window.player.x, window.player.y - window.player.radius, window.player.chatMessage);
+    }
 
     ctx.restore();
 }

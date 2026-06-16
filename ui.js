@@ -199,7 +199,7 @@ window.showOtherPlayerStatus = function(user) {
 
     win.style.display = 'flex';
     
-    // ★ multiplayer.js を経由して相手にステータス要求を送信
+    // multiplayer.js を経由して相手にステータス要求を送信
     if (window.MultiplayerManager && typeof window.MultiplayerManager.requestStatus === 'function') {
         window.MultiplayerManager.requestStatus(user.user_id);
     }
@@ -456,7 +456,7 @@ window.initUI = function() {
     });
 
     // =========================================================
-    // ★ マルチプレイチャット送信機能
+    // ★ マルチプレイチャット送信機能（吹き出し表示追加）
     // =========================================================
     const chatSendBtn = document.getElementById('chatSendBtn');
     if (chatSendBtn) {
@@ -471,8 +471,14 @@ window.initUI = function() {
                     myName = nameElem.innerText;
                 }
 
-                // 自分の画面に表示
+                // 自分の画面左下にログ表示
                 window.addLog(`<span class='color-player'>${myName}:</span> ${text}`, 'chat');
+                
+                // ★追加: 自分のキャラクターに吹き出しを表示させるためのプロパティをセット
+                if (window.player) {
+                    window.player.chatMessage = text;
+                    window.player.chatTimer = 5.0; // 5秒間表示
+                }
                 
                 // 通信送信
                 if (window.MultiplayerManager && typeof window.MultiplayerManager.sendData === 'function') {

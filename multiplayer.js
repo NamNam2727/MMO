@@ -9,7 +9,7 @@ window.MultiplayerManager = {
     myPartyId: null, // 将来用: パーティ結成時にIDを入れる
     
     // 他プレイヤーのデータを格納する箱
-    // 形式: { id, name, avatar, x, y, targetX, targetY, mapId, isAttacking, lastUpdateTime, image, imageLoaded }
+    // 形式: { id, name, avatar, x, y, targetX, targetY, mapId, isAttacking, lastUpdateTime, image, imageLoaded, chatMessage, chatTimer }
     otherPlayers: {}, 
     
     // --- 通信量削減（エコ）のための変数 ---
@@ -77,13 +77,18 @@ window.MultiplayerManager = {
             }
         }
 
-        // --- 他プレイヤーの滑らかな移動（補間処理） ---
+        // --- 他プレイヤーの滑らかな移動（補間処理）とタイマー管理 ---
         for (const id in this.otherPlayers) {
             const p = this.otherPlayers[id];
             // ターゲット座標に向かって少しずつ近づける（カクつき防止）
             if (p.x !== undefined && p.targetX !== undefined) {
                 p.x += (p.targetX - p.x) * 10 * dt;
                 p.y += (p.targetY - p.y) * 10 * dt;
+            }
+            
+            // ★追加: 他プレイヤーの吹き出し表示時間を減算する
+            if (p.chatTimer > 0) {
+                p.chatTimer -= dt;
             }
         }
     },
@@ -96,6 +101,11 @@ window.MultiplayerManager = {
         if (data.dataType === 'chat') {
             if (typeof window.addLog === 'function') {
                 window.addLog(`<span style="color: #aaffaa;">${data.senderName}:</span> ${data.text}`, 'chat');
+            }
+            // ★追加: 受信したチャットを他プレイヤーの吹き出しとしてセット
+            if (this.otherPlayers[senderId]) {
+                this.otherPlayers[senderId].chatMessage = data.text;
+                this.otherPlayers[senderId].chatTimer = 5.0; // 5秒間表示
             }
             return;
         }
@@ -159,7 +169,8 @@ window.MultiplayerManager = {
                     id: senderId, name: 'Player', avatar: '',
                     x: data.x, y: data.y, targetX: data.x, targetY: data.y,
                     mapId: data.mapId, isAttacking: data.isAttacking,
-                    image: null, imageLoaded: false
+                    image: null, imageLoaded: false,
+                    chatMessage: '', chatTimer: 0 // ★追加
                 };
             }
             const p = this.otherPlayers[senderId];
@@ -194,7 +205,9 @@ window.MultiplayerManager = {
             mapId: 'unknown',
             isAttacking: false,
             image: null,
-            imageLoaded: false
+            imageLoaded: false,
+            chatMessage: '', // ★追加
+            chatTimer: 0     // ★追加
         };
 
         // 画像の非同期ロード
@@ -222,7 +235,7 @@ window.MultiplayerManager = {
             }
             if (typeof window.updatePartyUI === 'function') window.updatePartyUI();
             
-            // ★ 新しい人が入ってきたら、即座に自分の位置を知らせる
+            // 新しい人が入ってきたら、即座に自分の位置を知らせる
             this.forceSendPos();
         }
     },
