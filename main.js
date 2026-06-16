@@ -19,7 +19,7 @@ window.addEventListener('contextmenu', (e) => {
 });
 
 // ==========================================
-// ★ 画面スクロールのスマート抑制処理 (追加)
+// ★ 画面スクロールのスマート抑制処理
 // ==========================================
 document.addEventListener('touchmove', function(e) {
     if (window.isDraggingItem) {
@@ -120,9 +120,26 @@ window.addEventListener('pointercancel', handlePointerUp);
 window.addEventListener('pointerout', handlePointerUp);
 
 // ==========================================
+// ★ アバター画像の読み込み管理
+// ==========================================
+function loadAvatarImages() {
+    // HTML側で設定した window.GameState から情報を取得
+    if (window.GameState && window.GameState.userInfo) {
+        const myUrl = window.GameState.userInfo.portrait || window.GameState.userInfo.portait;
+        if (myUrl && !window.playerAvatarImage) {
+            window.playerAvatarImage = new Image();
+            window.playerAvatarImage.crossOrigin = "anonymous";
+            window.playerAvatarImage.src = myUrl;
+        }
+    }
+}
+
+// ==========================================
 // 更新処理 (Update)
 // ==========================================
 function update(dt, timestamp) {
+    loadAvatarImages(); // 毎フレームチェックして、まだなければ画像を読み込む
+
     if (window.player.attackCooldown > 0) window.player.attackCooldown -= dt;
     
     let pIsFrozen = window.player.effects && window.player.effects.some(e => e.type === 'ice' && e.duration > 0);
@@ -347,11 +364,9 @@ function draw() {
     ctx.clearRect(0, 0, window.canvas.width, window.canvas.height);
     ctx.save(); ctx.translate(-window.camera.x, -window.camera.y);
 
-    // ★ 背景画像の描画（最背面）
     if (window.currentBackgroundImage && window.currentBackgroundImage.complete) {
         ctx.drawImage(window.currentBackgroundImage, 0, 0, window.world.width, window.world.height);
     } else {
-        // 画像がない、またはロード中は仮のグリッド線を描画
         ctx.strokeStyle = '#333'; ctx.lineWidth = 1; const gridSize = 32;
         const startX = Math.max(0, Math.floor(window.camera.x / gridSize) * gridSize); const startY = Math.max(0, Math.floor(window.camera.y / gridSize) * gridSize);
         const endX = Math.min(window.world.width, startX + window.camera.width + gridSize); const endY = Math.min(window.world.height, startY + window.camera.height + gridSize);
@@ -361,16 +376,13 @@ function draw() {
         ctx.stroke();
     }
 
-    // 枠線の描画
     ctx.strokeStyle = '#ff0000'; ctx.lineWidth = 4; ctx.strokeRect(0, 0, window.world.width, window.world.height);
 
-    // ★ 障害物の描画 (透明でない場合やデバッグモード時のみ描画するよう変更)
-    const DEBUG_DRAW_WALLS = false; // trueにすると壁の当たり判定が赤く可視化されます
+    const DEBUG_DRAW_WALLS = false;
     for (const obs of window.obstacles) {
         if (DEBUG_DRAW_WALLS || obs.color !== 'transparent') {
             ctx.fillStyle = DEBUG_DRAW_WALLS ? 'rgba(255, 0, 0, 0.3)' : obs.color;
             ctx.fillRect(obs.x, obs.y, obs.width, obs.height);
-            // デバッグ時のみ枠線を描く
             if (DEBUG_DRAW_WALLS) {
                 ctx.strokeStyle = 'red'; ctx.lineWidth = 1; ctx.strokeRect(obs.x, obs.y, obs.width, obs.height);
             }
@@ -437,9 +449,35 @@ function draw() {
         ctx.beginPath(); ctx.arc(window.player.targetX, window.player.targetY, 5, 0, Math.PI * 2); ctx.fillStyle = 'rgba(255, 255, 255, 0.5)'; ctx.fill();
     }
 
-    ctx.beginPath(); ctx.arc(window.player.x, window.player.y, window.player.radius, 0, Math.PI * 2);
-    ctx.fillStyle = (window.player.attackCooldown > window.player.attackRate - 0.1 && window.player.targetEnemy && window.player.isAutoAttacking && !pIsFrozen) ? '#ffffff' : window.player.color;
-    ctx.fill(); ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke();
+    // ==========================================
+    // ★ プレイヤーの描画（アバター画像対応）
+    // ==========================================
+    ctx.beginPath(); 
+    ctx.arc(window.player.x, window.player.y, window.player.radius, 0, Math.PI * 2);
+    
+    const isAttackingFlash = (window.player.attackCooldown > window.player.attackRate - 0.1 && window.player.targetEnemy && window.player.isAutoAttacking && !pIsFrozen);
+    
+    if (window.playerAvatarImage && window.playerAvatarImage.complete && window.playerAvatarImage.naturalWidth > 0) {
+        // 画像がロードできている場合は、円形に切り抜いて描画
+        ctx.save();
+        ctx.clip(); 
+        ctx.drawImage(window.playerAvatarImage, window.player.x - window.player.radius, window.player.y - window.player.radius, window.player.radius * 2, window.player.radius * 2);
+        
+        // 攻撃時の白フラッシュ
+        if (isAttackingFlash) {
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+            ctx.fill();
+        }
+        ctx.restore();
+        
+        // 外枠
+        ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke();
+    } else {
+        // 画像がない、またはロード中の場合は従来の色付き円を描画
+        ctx.fillStyle = isAttackingFlash ? '#ffffff' : window.player.color;
+        ctx.fill(); 
+        ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke();
+    }
 
     drawStatusEffects(window.player, ctx); 
 

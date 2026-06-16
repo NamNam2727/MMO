@@ -101,6 +101,57 @@ window.addLog = function(htmlText, type = 'sys') {
     }
 };
 
+// =========================================================
+// ★ マルチプレイ用 パーティUI表示処理（HTMLから引越し）
+// =========================================================
+window.updatePartyUI = function() {
+    const partyContainer = document.getElementById('partyWidget');
+    if (!partyContainer) return;
+    partyContainer.innerHTML = ''; // 中身をリセット
+    
+    // HTML側で設定された GameState がなければ終了
+    if (!window.GameState || !window.GameState.roomUsers || !window.GameState.userInfo) return;
+
+    window.GameState.roomUsers.forEach(user => {
+        if(user.user_id === window.GameState.userInfo.user_id) return; // 自分は除外
+        
+        const div = document.createElement('div');
+        div.style.display = 'flex';
+        div.style.alignItems = 'center';
+        div.style.background = 'rgba(0,0,0,0.6)';
+        div.style.padding = '4px 8px';
+        div.style.borderRadius = '20px';
+        div.style.marginBottom = '4px'; // アイコン同士の間隔
+        
+        const img = document.createElement('div');
+        img.style.width = '28px';
+        img.style.height = '28px';
+        img.style.borderRadius = '50%';
+        img.style.backgroundColor = '#555';
+        img.style.border = '1px solid #fff';
+        img.style.backgroundPosition = 'center';
+        
+        // GRAVITYアイコンのスペル揺れ(portait)対応
+        const avatarUrl = user.portrait || user.portait; 
+        if(avatarUrl) {
+            img.style.backgroundImage = `url(${avatarUrl})`;
+            img.style.backgroundSize = 'cover';
+        }
+        
+        const name = document.createElement('div');
+        name.style.color = 'white';
+        name.style.fontSize = '11px';
+        name.style.marginLeft = '8px';
+        name.style.fontWeight = 'bold';
+        name.innerText = user.user_name || user.name || 'Player';
+        
+        div.appendChild(img);
+        div.appendChild(name);
+        partyContainer.appendChild(div);
+    });
+};
+
+
 window.initUI = function() {
     // ステータス画面を他のウィンドウより確実に前面に出すためのCSS強制適用
     const pWidget = document.getElementById('playerWidget');
@@ -121,6 +172,11 @@ window.initUI = function() {
         if (statusWindowObj) {
             statusWindowObj.style.overflowX = 'hidden';
         }
+    }
+
+    // ゲーム起動時に一度パーティUIを描画しておく
+    if (typeof window.updatePartyUI === 'function') {
+        window.updatePartyUI();
     }
 
     // ------------------------------------
@@ -392,14 +448,13 @@ window.initUI = function() {
     }
 
     // =========================================================
-    // ★ マルチプレイチャット受信機能の登録
+    // ★ マルチプレイ通信イベントの受取とログ・UI反映
     // =========================================================
     if (window.Multiplayer) {
+        // --- 1. メッセージ（チャットやデータ）を受信した時 ---
         const prevOnReceive = window.Multiplayer.onReceiveData;
-        
         window.Multiplayer.onReceiveData = (data, userId) => {
-            // 既存の受信処理（キャラクター移動など）があればそれを実行
-            if (prevOnReceive) prevOnReceive(data, userId);
+            if (prevOnReceive) prevOnReceive(data, userId); // 既存の処理があれば実行
             
             // チャットデータを受信した場合のみログに表示
             if (data && data.dataType === 'chat') {
@@ -407,6 +462,32 @@ window.initUI = function() {
                 // 相手からの発言なので色を変えて表示（明るい緑色）
                 window.addLog(`<span style="color: #aaffaa;">${senderName}:</span> ${data.text}`, 'chat');
             }
+        };
+
+        // --- 2. 誰かが入室した時 ---
+        const prevOnJoin = window.Multiplayer.onPlayerJoin;
+        window.Multiplayer.onPlayerJoin = (userData) => {
+            if (prevOnJoin) prevOnJoin(userData);
+            
+            // ログに表示
+            const userName = userData.user_name || userData.name || '誰か';
+            window.addLog(`<span class='color-sys'>[入室] ${userName} が部屋に参加しました。</span>`, 'sys');
+            
+            // パーティ一覧を再描画
+            if (typeof window.updatePartyUI === 'function') window.updatePartyUI();
+        };
+
+        // --- 3. 誰かが退室した時 ---
+        const prevOnLeave = window.Multiplayer.onPlayerLeave;
+        window.Multiplayer.onPlayerLeave = (userData) => {
+            if (prevOnLeave) prevOnLeave(userData);
+            
+            // ログに表示
+            const userName = userData.user_name || userData.name || '誰か';
+            window.addLog(`<span class='color-sys'>[退室] ${userName} が部屋を退出しました。</span>`, 'sys');
+            
+            // パーティ一覧を再描画
+            if (typeof window.updatePartyUI === 'function') window.updatePartyUI();
         };
     }
 };
