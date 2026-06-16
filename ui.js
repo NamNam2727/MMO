@@ -37,7 +37,6 @@ document.addEventListener('pointerdown', (e) => {
     if (detail && detail.style.display !== 'none') {
         if (!e.target.closest('#itemDetail')) {
             const slot = e.target.closest('.inv-slot');
-            // 空スロットか、スロット以外の場所をタップした場合は閉じる
             if (!slot || !slot.querySelector('.item-icon')) {
                 detail.style.display = 'none';
             }
@@ -102,57 +101,149 @@ window.addLog = function(htmlText, type = 'sys') {
 };
 
 // =========================================================
-// ★ マルチプレイ用 パーティUI表示処理（HTMLから引越し）
+// ★ HTMLを触らずに動的にDOMを生成する処理（パーティUI関連）
 // =========================================================
-window.updatePartyUI = function() {
-    const partyContainer = document.getElementById('partyWidget');
-    if (!partyContainer) return;
-    partyContainer.innerHTML = ''; // 中身をリセット
+function createDynamicPartyUI() {
+    const uiLayer = document.getElementById('ui-layer');
+    if (!uiLayer) return;
+
+    // 1. メンバー表示ボタンの作成 (バッグボタンの上)
+    const memberBtn = document.createElement('button');
+    memberBtn.id = 'memberBtn';
+    memberBtn.innerText = 'メンバー';
+    memberBtn.style.cssText = 'position: absolute; right: 15px; bottom: 150px; width: 50px; height: 50px; border-radius: 10px; background-color: rgba(255, 140, 0, 0.7); color: white; font-size: 11px; font-weight: bold; border: 3px solid rgba(255, 255, 255, 0.8); pointer-events: auto; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.3); -webkit-tap-highlight-color: transparent; display: flex; justify-content: center; align-items: center; z-index: 50;';
     
-    // HTML側で設定された GameState がなければ終了
+    memberBtn.addEventListener('pointerdown', (e) => {
+        e.stopPropagation();
+        const win = document.getElementById('partyListWindow');
+        if (win) {
+            win.style.display = (win.style.display === 'flex') ? 'none' : 'flex';
+        }
+    });
+    uiLayer.appendChild(memberBtn);
+
+    // 2. パーティ一覧ウィンドウの作成
+    const partyWin = document.createElement('div');
+    partyWin.id = 'partyListWindow';
+    partyWin.style.cssText = 'position: absolute; top: 15%; left: 10%; width: 80%; max-height: 70%; background-color: rgba(20,20,20,0.95); border: 2px solid #777; border-radius: 8px; display: none; flex-direction: column; pointer-events: auto; color: white; padding: 15px; box-sizing: border-box; overflow-y: auto; z-index: 75; box-shadow: 0 10px 20px rgba(0,0,0,0.7);';
+    
+    const pHeader = document.createElement('div');
+    pHeader.innerHTML = '<span>ルームメンバー</span><span id="closePartyBtn" style="cursor:pointer;">❌</span>';
+    pHeader.style.cssText = 'display: flex; justify-content: space-between; font-size: 16px; font-weight: bold; border-bottom: 1px solid #555; padding-bottom: 10px; margin-bottom: 10px;';
+    
+    const pList = document.createElement('div');
+    pList.id = 'partyDynamicList';
+    pList.style.cssText = 'display: flex; flex-direction: column; gap: 8px; overflow-y: auto;';
+
+    partyWin.appendChild(pHeader);
+    partyWin.appendChild(pList);
+    uiLayer.appendChild(partyWin);
+
+    pHeader.querySelector('#closePartyBtn').addEventListener('pointerdown', (e) => {
+        e.stopPropagation();
+        partyWin.style.display = 'none';
+    });
+
+    // 3. 他プレイヤーステータスウィンドウの作成
+    const otherStatWin = document.createElement('div');
+    otherStatWin.id = 'otherPlayerStatusWindow';
+    otherStatWin.style.cssText = 'position: absolute; top: 20%; left: 5%; width: 90%; max-height: 60%; background-color: rgba(30,40,50,0.95); border: 2px solid #55a; border-radius: 8px; display: none; flex-direction: column; pointer-events: auto; color: white; padding: 15px; box-sizing: border-box; overflow-y: auto; z-index: 80; box-shadow: 0 10px 20px rgba(0,0,0,0.8);';
+    
+    const oHeader = document.createElement('div');
+    oHeader.innerHTML = '<span id="oStatName">プレイヤー名</span><span id="closeOtherStatBtn" style="cursor:pointer;">❌</span>';
+    oHeader.style.cssText = 'display: flex; justify-content: space-between; font-size: 16px; font-weight: bold; border-bottom: 1px solid #55a; padding-bottom: 10px; margin-bottom: 10px;';
+    
+    const oContent = document.createElement('div');
+    oContent.id = 'oStatContent';
+    oContent.style.cssText = 'font-size: 13px; line-height: 1.5; color: #ddd;';
+    
+    otherStatWin.appendChild(oHeader);
+    otherStatWin.appendChild(oContent);
+    uiLayer.appendChild(otherStatWin);
+
+    oHeader.querySelector('#closeOtherStatBtn').addEventListener('pointerdown', (e) => {
+        e.stopPropagation();
+        otherStatWin.style.display = 'none';
+    });
+
+    // 古いパーティUIを非表示にする
+    const oldPartyWidget = document.getElementById('partyWidget');
+    if (oldPartyWidget) oldPartyWidget.style.display = 'none';
+}
+
+// 他プレイヤーの行をタップした時の処理
+window.showOtherPlayerStatus = function(user) {
+    const win = document.getElementById('otherPlayerStatusWindow');
+    if (!win) return;
+
+    const nameEl = document.getElementById('oStatName');
+    const contentEl = document.getElementById('oStatContent');
+    
+    const avatarUrl = user.portrait || user.portait || '';
+    const userName = user.user_name || user.name || 'Player';
+
+    nameEl.innerText = `${userName} のステータス`;
+
+    // 現状は送受信の基盤がないため、ダミー表示または取得中表示にする
+    contentEl.innerHTML = `
+        <div style="display: flex; align-items: center; margin-bottom: 15px; background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px;">
+            <div style="width: 50px; height: 50px; border-radius: 50%; background-color: #555; border: 2px solid #fff; background-image: url(${avatarUrl}); background-size: cover; background-position: center; margin-right: 15px;"></div>
+            <div>
+                <div style="font-weight: bold; color: white;">LV: ???</div>
+                <div style="color: #aaa; font-size: 11px;">ID: ${user.user_id}</div>
+            </div>
+        </div>
+        <div style="text-align: center; color: #aaa; padding: 20px; border: 1px dashed #555; border-radius: 8px;">
+            詳細なステータスデータを<br>取得しています...<br>
+            <span style="font-size:10px;">(※今後通信ロジックを実装後に表示されます)</span>
+        </div>
+    `;
+
+    win.style.display = 'flex';
+};
+
+// パーティ一覧UIの更新（別窓用）
+window.updatePartyUI = function() {
+    const pList = document.getElementById('partyDynamicList');
+    if (!pList) return;
+    pList.innerHTML = '';
+    
     if (!window.GameState || !window.GameState.roomUsers || !window.GameState.userInfo) return;
 
-    window.GameState.roomUsers.forEach(user => {
-        if(user.user_id === window.GameState.userInfo.user_id) return; // 自分は除外
-        
+    // 自分自身も一覧に表示するかはお好みですが、今回は他人のみとします
+    const others = window.GameState.roomUsers.filter(u => u.user_id !== window.GameState.userInfo.user_id);
+
+    if (others.length === 0) {
+        pList.innerHTML = '<div style="color:#777; text-align:center; padding: 20px 0; font-size: 12px;">ルームに他のメンバーはいません。</div>';
+        return;
+    }
+
+    others.forEach(user => {
         const div = document.createElement('div');
-        div.style.display = 'flex';
-        div.style.alignItems = 'center';
-        div.style.background = 'rgba(0,0,0,0.6)';
-        div.style.padding = '4px 8px';
-        div.style.borderRadius = '20px';
-        div.style.marginBottom = '4px'; // アイコン同士の間隔
+        div.style.cssText = 'display: flex; align-items: center; background: rgba(255,255,255,0.05); padding: 8px; border-radius: 8px; cursor: pointer; border: 1px solid transparent; transition: all 0.2s;';
         
-        const img = document.createElement('div');
-        img.style.width = '28px';
-        img.style.height = '28px';
-        img.style.borderRadius = '50%';
-        img.style.backgroundColor = '#555';
-        img.style.border = '1px solid #fff';
-        img.style.backgroundPosition = 'center';
+        const avatarUrl = user.portrait || user.portait || ''; 
         
-        // GRAVITYアイコンのスペル揺れ(portait)対応
-        const avatarUrl = user.portrait || user.portait; 
-        if(avatarUrl) {
-            img.style.backgroundImage = `url(${avatarUrl})`;
-            img.style.backgroundSize = 'cover';
-        }
+        div.innerHTML = `
+            <div style="width: 36px; height: 36px; border-radius: 50%; background-color: #555; border: 1px solid #fff; background-image: url(${avatarUrl}); background-size: cover; background-position: center;"></div>
+            <div style="margin-left: 12px; font-weight: bold; font-size: 14px; flex: 1;">${user.user_name || user.name || 'Player'}</div>
+            <div style="color: #aaa; font-size: 12px;">🔍詳細</div>
+        `;
         
-        const name = document.createElement('div');
-        name.style.color = 'white';
-        name.style.fontSize = '11px';
-        name.style.marginLeft = '8px';
-        name.style.fontWeight = 'bold';
-        name.innerText = user.user_name || user.name || 'Player';
-        
-        div.appendChild(img);
-        div.appendChild(name);
-        partyContainer.appendChild(div);
+        div.addEventListener('pointerdown', (e) => {
+            e.stopPropagation();
+            window.showOtherPlayerStatus(user);
+        });
+
+        pList.appendChild(div);
     });
 };
 
 
 window.initUI = function() {
+    // ★ HTMLを触らずに動的UIを生成する
+    createDynamicPartyUI();
+
     // ステータス画面を他のウィンドウより確実に前面に出すためのCSS強制適用
     const pWidget = document.getElementById('playerWidget');
     if (pWidget) pWidget.style.setProperty('z-index', '60', 'important');
@@ -174,10 +265,8 @@ window.initUI = function() {
         }
     }
 
-    // ゲーム起動時に一度パーティUIを描画しておく
-    if (typeof window.updatePartyUI === 'function') {
-        window.updatePartyUI();
-    }
+    // 初回パーティリストの描画
+    if (typeof window.updatePartyUI === 'function') window.updatePartyUI();
 
     // ------------------------------------
     // 左上ウィジェット・ステータス画面の更新関数
@@ -332,7 +421,6 @@ window.initUI = function() {
             const input = document.getElementById('chatInput');
             const text = input.value.trim();
             if (text) {
-                // UIから自分の名前を取得（未設定なら「プレイヤー」）
                 let myName = 'プレイヤー';
                 const nameElem = document.getElementById('uiPlayerName');
                 if (nameElem && nameElem.innerText && nameElem.innerText !== 'Player Name') {
@@ -342,7 +430,7 @@ window.initUI = function() {
                 // 自分の画面に表示
                 window.addLog(`<span class='color-player'>${myName}:</span> ${text}`, 'chat');
                 
-                // マルチプレイ通信で他プレイヤーに送信 (dataType 'chat' で識別)
+                // 通信送信
                 if (window.Multiplayer && typeof window.Multiplayer.sendData === 'function') {
                     window.Multiplayer.sendData({
                         dataType: 'chat',
@@ -389,17 +477,14 @@ window.initUI = function() {
             window.tempStats = {str:0, int:0, vit:0};
         } else if (w) { 
             window.updateStatusUI(); 
-            
-            // playerWidget の表示位置を取得し、相対的にステータスのTopを合わせる
             const pWidget = document.getElementById('playerWidget');
             if (pWidget) {
                 const rect = pWidget.getBoundingClientRect();
                 w.style.top = rect.top + 'px';
             }
-            
             w.style.display = 'flex'; 
         }
-    }, { passive: true }); // stopPropagationを外し、自然に処理させる
+    }, { passive: true });
 
     document.getElementById('closeStatusBtn').addEventListener('pointerdown', (e) => { 
         const w = document.getElementById('statusWindow');
@@ -442,7 +527,6 @@ window.initUI = function() {
         }
     });
 
-    // インベントリUIの初期化を分離した外部JS(inventory.js)から呼び出す
     if(typeof window.initInventoryUI === 'function') {
         window.initInventoryUI();
     }
@@ -454,12 +538,10 @@ window.initUI = function() {
         // --- 1. メッセージ（チャットやデータ）を受信した時 ---
         const prevOnReceive = window.Multiplayer.onReceiveData;
         window.Multiplayer.onReceiveData = (data, userId) => {
-            if (prevOnReceive) prevOnReceive(data, userId); // 既存の処理があれば実行
+            if (prevOnReceive) prevOnReceive(data, userId); 
             
-            // チャットデータを受信した場合のみログに表示
             if (data && data.dataType === 'chat') {
                 const senderName = data.senderName || 'プレイヤー';
-                // 相手からの発言なので色を変えて表示（明るい緑色）
                 window.addLog(`<span style="color: #aaffaa;">${senderName}:</span> ${data.text}`, 'chat');
             }
         };
@@ -469,11 +551,9 @@ window.initUI = function() {
         window.Multiplayer.onPlayerJoin = (userData) => {
             if (prevOnJoin) prevOnJoin(userData);
             
-            // ログに表示
             const userName = userData.user_name || userData.name || '誰か';
             window.addLog(`<span class='color-sys'>[入室] ${userName} が部屋に参加しました。</span>`, 'sys');
             
-            // パーティ一覧を再描画
             if (typeof window.updatePartyUI === 'function') window.updatePartyUI();
         };
 
@@ -482,11 +562,9 @@ window.initUI = function() {
         window.Multiplayer.onPlayerLeave = (userData) => {
             if (prevOnLeave) prevOnLeave(userData);
             
-            // ログに表示
             const userName = userData.user_name || userData.name || '誰か';
             window.addLog(`<span class='color-sys'>[退室] ${userName} が部屋を退出しました。</span>`, 'sys');
             
-            // パーティ一覧を再描画
             if (typeof window.updatePartyUI === 'function') window.updatePartyUI();
         };
     }
