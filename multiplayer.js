@@ -9,13 +9,12 @@ window.MultiplayerManager = {
     myPartyId: null, // 将来用: パーティ結成時にIDを入れる
     
     // 他プレイヤーのデータを格納する箱
-    // 形式: { id, name, avatar, x, y, targetX, targetY, mapId, isAttacking, lastUpdateTime, image, imageLoaded, chatMessage, chatTimer }
     otherPlayers: {}, 
     
     // --- 通信量削減（エコ）のための変数 ---
     lastSentPos: { x: 0, y: 0 },
     lastSendTime: 0,
-    sendInterval: 100, // 0.1秒に1回しか送信しない（秒間10回）これで通信量を劇的に削減
+    sendInterval: 100, // 0.1秒に1回しか送信しない
 
     // ==========================================
     // 1. データ送信処理 (エコ仕様)
@@ -31,7 +30,7 @@ window.MultiplayerManager = {
         window.AgentSDK.room.sendMessage({ message: JSON.stringify(data) });
     },
     
-    // 誰かが入室した時などに、自分の現在位置を強制的に発信する
+    // 自分の現在位置を強制的に発信する
     forceSendPos: function() {
         if (!window.player) return;
         this.sendData({
@@ -43,6 +42,13 @@ window.MultiplayerManager = {
         this.lastSentPos.x = window.player.x;
         this.lastSentPos.y = window.player.y;
         this.lastSendTime = performance.now();
+    },
+
+    // ★追加: 他プレイヤー全員に位置情報を要求する
+    requestPositions: function() {
+        this.sendData({
+            dataType: 'pos_req'
+        });
     },
 
     // 他プレイヤーのステータスを要求する
@@ -60,9 +66,7 @@ window.MultiplayerManager = {
         // --- 自分の位置情報の送信（動いた時だけ送る） ---
         const dist = Math.hypot(window.player.x - this.lastSentPos.x, window.player.y - this.lastSentPos.y);
         
-        // 5ピクセル以上動いた、または攻撃中であれば送信候補
         if (dist > 5 || window.player.isAutoAttacking) {
-            // 前回の送信から 0.1秒 (sendInterval) 以上経過しているかチェック
             if (timestamp - this.lastSendTime > this.sendInterval) {
                 this.sendData({
                     dataType: 'move',
@@ -77,19 +81,14 @@ window.MultiplayerManager = {
             }
         }
 
-        // --- 他プレイヤーの滑らかな移動（補間処理）とタイマー管理 ---
+        // --- 他プレイヤーの滑らかな移動（補間処理） ---
         for (const id in this.otherPlayers) {
             const p = this.otherPlayers[id];
-            // ターゲット座標に向かって少しずつ近づける（カクつき防止）
             if (p.x !== undefined && p.targetX !== undefined) {
                 p.x += (p.targetX - p.x) * 10 * dt;
                 p.y += (p.targetY - p.y) * 10 * dt;
             }
-            
-            // ★追加: 他プレイヤーの吹き出し表示時間を減算する
-            if (p.chatTimer > 0) {
-                p.chatTimer -= dt;
-            }
+            if (p.chatTimer > 0) p.chatTimer -= dt;
         }
     },
     
@@ -97,20 +96,23 @@ window.MultiplayerManager = {
     // 2. データ受信処理 (足切りフィルター搭載)
     // ==========================================
     handleReceive: function(data, senderId) {
-        // [A] チャットはマップ関係なく全員で共有
         if (data.dataType === 'chat') {
             if (typeof window.addLog === 'function') {
                 window.addLog(`<span style="color: #aaffaa;">${data.senderName}:</span> ${data.text}`, 'chat');
             }
-            // ★追加: 受信したチャットを他プレイヤーの吹き出しとしてセット
             if (this.otherPlayers[senderId]) {
                 this.otherPlayers[senderId].chatMessage = data.text;
-                this.otherPlayers[senderId].chatTimer = 5.0; // 5秒間表示
+                this.otherPlayers[senderId].chatTimer = 5.0; 
             }
             return;
         }
 
-        // [B] ステータス要求の受信（自分が要求された場合、返信する）
+        // ★追加: 位置情報の要求を受信した場合、自分の位置を送信してあげる
+        if (data.dataType === 'pos_req') {
+            this.forceSendPos();
+            return;
+        }
+
         if (data.dataType === 'status_req') {
             if (window.GameState && window.GameState.userInfo && data.targetId === window.GameState.userInfo.user_id) {
                 if (!window.player) return;
@@ -118,7 +120,7 @@ window.MultiplayerManager = {
                 
                 const resData = {
                     dataType: 'status_res',
-                    targetId: senderId, // 要求元に送り返す
+                    targetId: senderId, 
                     userId: window.GameState.userInfo.user_id,
                     level: window.player.level,
                     exp: window.player.exp,
@@ -141,7 +143,6 @@ window.MultiplayerManager = {
             return;
         }
 
-        // [C] ステータス返信の受信（自分が要求した相手からのデータ表示）
         if (data.dataType === 'status_res') {
             if (window.GameState && window.GameState.userInfo && data.targetId === window.GameState.userInfo.user_id) {
                 if (typeof window.updateOtherPlayerStatusUI === 'function') {
@@ -151,31 +152,25 @@ window.MultiplayerManager = {
             return;
         }
         
-        // [D] 足切りフィルター (自分と関係ないマップ・パーティのデータはここで捨てる)
+        // 足切りフィルター
         const currentMap = window.MapManager ? window.MapManager.currentMapId : 'town';
         const isSameMap = (data.mapId === currentMap);
         const isSameParty = (this.myPartyId !== null && data.partyId === this.myPartyId);
         
-        // 「違うマップ」かつ「同じパーティでもない」なら、描画も計算も不要なので即終了
-        if (!isSameMap && !isSameParty) {
-            return; 
-        }
+        if (!isSameMap && !isSameParty) return; 
         
-        // [E] 同じマップ、または同じパーティの移動データ処理
         if (data.dataType === 'move') {
             if (!this.otherPlayers[senderId]) {
-                // 未知のプレイヤーからのデータの場合
                 this.otherPlayers[senderId] = { 
                     id: senderId, name: 'Player', avatar: '',
                     x: data.x, y: data.y, targetX: data.x, targetY: data.y,
                     mapId: data.mapId, isAttacking: data.isAttacking,
                     image: null, imageLoaded: false,
-                    chatMessage: '', chatTimer: 0 // ★追加
+                    chatMessage: '', chatTimer: 0 
                 };
             }
             const p = this.otherPlayers[senderId];
             
-            // 相手が最初からこのマップにいた場合、ワープを防ぐための初期座標セット
             if (p.x === 0 && p.y === 0) {
                 p.x = data.x;
                 p.y = data.y;
@@ -193,7 +188,6 @@ window.MultiplayerManager = {
     // 3. 入退室の管理
     // ==========================================
     handleJoin: function(user, silent = false) {
-        // 自分自身は追加しない
         if (window.GameState && window.GameState.userInfo && user.user_id === window.GameState.userInfo.user_id) return;
 
         const avatarUrl = user.portrait || user.portait || '';
@@ -206,11 +200,10 @@ window.MultiplayerManager = {
             isAttacking: false,
             image: null,
             imageLoaded: false,
-            chatMessage: '', // ★追加
-            chatTimer: 0     // ★追加
+            chatMessage: '', 
+            chatTimer: 0     
         };
 
-        // 画像の非同期ロード
         if (avatarUrl) {
             const img = new Image();
             img.crossOrigin = "anonymous";
@@ -235,12 +228,10 @@ window.MultiplayerManager = {
             }
             if (typeof window.updatePartyUI === 'function') window.updatePartyUI();
             
-            // 新しい人が入ってきたら、即座に自分の位置を知らせる
-            this.forceSendPos();
+            // ★廃止: 入室時の無条件な位置送信処理を削除しました
         }
     },
 
-    // 退室時はメモリから完全に消去して軽くする
     handleLeave: function(user) {
         delete this.otherPlayers[user.user_id];
         
@@ -251,27 +242,21 @@ window.MultiplayerManager = {
         if (typeof window.updatePartyUI === 'function') window.updatePartyUI();
     },
 
-    // ゲーム開始時、すでに部屋にいるユーザーを一括登録
     initExistingPlayers: function() {
         if (window.GameState && window.GameState.roomUsers) {
             window.GameState.roomUsers.forEach(user => {
                 this.handleJoin(user, true);
             });
-            // 初期メンバー登録後、自分の位置を発信
-            this.forceSendPos();
+            // ★廃止: 入室時の無条件な位置送信処理を削除しました
         }
     }
 };
 
-// ==========================================
-// ★ SDK側のインターフェース (window.Multiplayer) を上書き接続
-// ==========================================
 if (window.Multiplayer) {
     window.Multiplayer.sendData = function(data) { window.MultiplayerManager.sendData(data); };
     window.Multiplayer.onReceiveData = function(data, userId) { window.MultiplayerManager.handleReceive(data, userId); };
     window.Multiplayer.onPlayerJoin = function(user) { window.MultiplayerManager.handleJoin(user); };
     window.Multiplayer.onPlayerLeave = function(user) { window.MultiplayerManager.handleLeave(user); };
     
-    // ロード完了と同時に、既存プレイヤーのアイコン等をセットアップ
     window.MultiplayerManager.initExistingPlayers();
 }

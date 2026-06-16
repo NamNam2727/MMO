@@ -4,28 +4,25 @@
 // =========================================================
 
 window.MapManager = {
-    // ★追加: GitHubの絶対パス（ルートURL）を定義
+    // GitHubの絶対パス（ルートURL）を定義
     baseURL: 'https://namnam2727.github.io/MMO/',
     
     currentMapId: null,
     
     // =====================================================
     // 1. マップの目次 (インデックス)
-    // エリア毎のサブフォルダ構成に合わせてパスを指定します
     // =====================================================
     mapList: {
         'town': {
             name: 'はじまりの街',
-            scriptUrl: 'maps/town/data.js' // サブフォルダからの読み込み
+            scriptUrl: 'maps/town/data.js' 
         },
         'forest': {
             name: '迷いの森',
             scriptUrl: 'maps/forest/data.js'
         }
-        // 今後マップが増えたらここに追記していきます
     },
 
-    // 読み込まれたマップデータを格納する場所
     mapDataStore: {},
 
     // =====================================================
@@ -39,13 +36,9 @@ window.MapManager = {
 
         if (typeof window.addLog === 'function') window.addLog(`<span class='color-sys'>${this.mapList[mapId].name} へ移動中...</span>`, 'sys');
 
-        // ※ここに「画面を暗転させる」「Now Loadingを出す」などの処理を後日追加します
-
-        // 既にデータが読み込み済みかチェック
         if (this.mapDataStore[mapId]) {
             this.setupMap(mapId, spawnX, spawnY);
         } else {
-            // 未読み込みの場合はJSファイルを動的にロード
             this.loadScript(this.mapList[mapId].scriptUrl, () => {
                 this.setupMap(mapId, spawnX, spawnY);
             });
@@ -57,8 +50,6 @@ window.MapManager = {
     // =====================================================
     loadScript: function(url, callback) {
         const script = document.createElement('script');
-        
-        // ★修正: baseURLを付与して「絶対パス」として読み込むように変更
         const absoluteUrl = this.baseURL + url;
         script.src = absoluteUrl + '?v=' + new Date().getTime(); 
         
@@ -83,12 +74,12 @@ window.MapManager = {
 
         this.currentMapId = mapId;
         
-        const GRID_SIZE = 32; // マップの基本グリッドサイズ
+        const GRID_SIZE = 32; 
         
         let defaultSpawnX = null;
         let defaultSpawnY = null;
 
-        // [A] ワールドサイズの設定（配列の数 × 32px）
+        // [A] ワールドサイズの設定
         if (data.collisionMap && data.collisionMap.length > 0) {
             const gridCols = data.collisionMap[0].length;
             const gridRows = data.collisionMap.length;
@@ -101,28 +92,24 @@ window.MapManager = {
                 for (let x = 0; x < gridCols; x++) {
                     const cell = data.collisionMap[y][x];
                     
-                    // 1 を壁とする (32x32px の壁を配置)
                     if (cell === 1) { 
                         window.obstacles.push({
                             x: x * GRID_SIZE,
                             y: y * GRID_SIZE,
                             width: GRID_SIZE,
                             height: GRID_SIZE,
-                            // 本番用に壁を透明にして見えなくします（画像のみが見える状態）
                             color: 'transparent'
                         });
                     }
-                    // 4 は初期スポーン地点
                     else if (cell === 4) {
                         defaultSpawnX = x * GRID_SIZE + (GRID_SIZE / 2);
                         defaultSpawnY = y * GRID_SIZE + (GRID_SIZE / 2);
                     }
-                    // 2 や 3 などのイベントトリガー（別途 main.js で判定）
                 }
             }
         }
 
-        // [C] 背景画像の設定 (Imageオブジェクトを生成してメインループへ渡す)
+        // [C] 背景画像の設定
         if (data.bgImage) {
             const img = new Image();
             img.src = data.bgImage;
@@ -138,29 +125,36 @@ window.MapManager = {
 
         // [D] A*経路探索用グリッドの再構築
         if (typeof window.initPathGrid === 'function' && window.player) {
-            window.pathGridSize = GRID_SIZE; // 経路探索も32px基準で行う
+            window.pathGridSize = GRID_SIZE; 
             window.pathCols = Math.ceil(window.world.width / window.pathGridSize); 
             window.pathRows = Math.ceil(window.world.height / window.pathGridSize);
             window.initPathGrid(window.player.radius);
         }
 
         // [E] プレイヤーの座標セット
-        // 指定された座標があればそれを使用、なければマップデータ内の '4' の座標を使用
         let finalSpawnX = spawnX !== undefined ? spawnX : defaultSpawnX;
         let finalSpawnY = spawnY !== undefined ? spawnY : defaultSpawnY;
 
         if (window.player && finalSpawnX !== null && finalSpawnY !== null) {
             window.player.x = finalSpawnX;
             window.player.y = finalSpawnY;
-            // ターゲットや移動経路をリセット
             window.playerPath = [];
             window.player.targetEnemy = null;
             window.player.targetItem = null;
         }
 
         // [F] NPCや敵のスポーン（将来用）
-        // if (data.npcMap) { ... radius: 24 (48px) に設定して広げる }
 
         if (typeof window.addLog === 'function') window.addLog(`<span class='color-sys'>${this.mapList[mapId].name} に到着しました。</span>`, 'sys');
+
+        // =====================================================
+        // [G] ★追加: マップ構築完了時に、マルチプレイ同期を開始する
+        // =====================================================
+        if (window.MultiplayerManager) {
+            // ① まず自分が到着した位置をみんなに知らせる
+            window.MultiplayerManager.forceSendPos();
+            // ② マップ上にいる他のプレイヤーたちに位置情報を要求する
+            window.MultiplayerManager.requestPositions();
+        }
     }
 };
