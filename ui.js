@@ -107,11 +107,11 @@ function createDynamicPartyUI() {
     const uiLayer = document.getElementById('ui-layer');
     if (!uiLayer) return;
 
-    // 1. メンバー表示ボタンの作成 (バッグボタンの上)
+    // 1. メンバー表示ボタンの作成 (バッグボタンの左側へ移動)
     const memberBtn = document.createElement('button');
     memberBtn.id = 'memberBtn';
     memberBtn.innerText = 'メンバー';
-    memberBtn.style.cssText = 'position: absolute; right: 15px; bottom: 150px; width: 50px; height: 50px; border-radius: 10px; background-color: rgba(255, 140, 0, 0.7); color: white; font-size: 11px; font-weight: bold; border: 3px solid rgba(255, 255, 255, 0.8); pointer-events: auto; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.3); -webkit-tap-highlight-color: transparent; display: flex; justify-content: center; align-items: center; z-index: 50;';
+    memberBtn.style.cssText = 'position: absolute; right: 75px; bottom: 90px; width: 50px; height: 50px; border-radius: 10px; background-color: rgba(255, 140, 0, 0.7); color: white; font-size: 11px; font-weight: bold; border: 3px solid rgba(255, 255, 255, 0.8); pointer-events: auto; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.3); -webkit-tap-highlight-color: transparent; display: flex; justify-content: center; align-items: center; z-index: 50;';
     
     memberBtn.addEventListener('pointerdown', (e) => {
         e.stopPropagation();
@@ -184,23 +184,67 @@ window.showOtherPlayerStatus = function(user) {
 
     nameEl.innerText = `${userName} のステータス`;
 
-    // 現状は送受信の基盤がないため、ダミー表示または取得中表示にする
+    // 取得中の仮表示
     contentEl.innerHTML = `
         <div style="display: flex; align-items: center; margin-bottom: 15px; background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px;">
             <div style="width: 50px; height: 50px; border-radius: 50%; background-color: #555; border: 2px solid #fff; background-image: url(${avatarUrl}); background-size: cover; background-position: center; margin-right: 15px;"></div>
             <div>
-                <div style="font-weight: bold; color: white;">LV: ???</div>
-                <div style="color: #aaa; font-size: 11px;">ID: ${user.user_id}</div>
+                <div style="font-weight: bold; color: white; font-size: 16px;">LV: ???</div>
             </div>
         </div>
         <div style="text-align: center; color: #aaa; padding: 20px; border: 1px dashed #555; border-radius: 8px;">
-            詳細なステータスデータを<br>取得しています...<br>
-            <span style="font-size:10px;">(※今後通信ロジックを実装後に表示されます)</span>
+            ステータスデータを取得しています...
         </div>
     `;
 
     win.style.display = 'flex';
+    
+    // ★ multiplayer.js を経由して相手にステータス要求を送信
+    if (window.MultiplayerManager && typeof window.MultiplayerManager.requestStatus === 'function') {
+        window.MultiplayerManager.requestStatus(user.user_id);
+    }
 };
+
+// 受信したステータスデータを画面に反映させる
+window.updateOtherPlayerStatusUI = function(data) {
+    const win = document.getElementById('otherPlayerStatusWindow');
+    const contentEl = document.getElementById('oStatContent');
+    if (!win || win.style.display === 'none' || !contentEl) return;
+    
+    let avatarUrl = '';
+    if (window.MultiplayerManager && window.MultiplayerManager.otherPlayers[data.userId]) {
+        avatarUrl = window.MultiplayerManager.otherPlayers[data.userId].avatar || '';
+    }
+
+    contentEl.innerHTML = `
+        <div style="display: flex; align-items: center; margin-bottom: 10px; background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px;">
+            <div style="width: 50px; height: 50px; border-radius: 50%; background-color: #555; border: 2px solid #fff; background-image: url(${avatarUrl}); background-size: cover; background-position: center; margin-right: 15px;"></div>
+            <div>
+                <div style="font-weight: bold; color: white; font-size: 16px;">LV: ${data.level}</div>
+                <div style="color: #aaa; font-size: 11px;">EXP: ${data.exp}</div>
+            </div>
+        </div>
+        
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 13px; background: rgba(0,0,0,0.5); padding: 10px; border-radius: 8px; margin-bottom: 10px;">
+            <div>ちから: <span style="color:#ff0">${data.str}</span></div>
+            <div>まりょく: <span style="color:#ff0">${data.int}</span></div>
+            <div>たいりょく: <span style="color:#ff0">${data.vit}</span></div>
+            <div></div>
+            <div>HP: ${data.hp} / ${data.maxHp}</div>
+            <div>MP: ${data.mp} / ${data.maxMp}</div>
+            <div>ATK: ${data.atk}</div>
+            <div>MATK: ${data.matk}</div>
+            <div>防御: ${data.armor}</div>
+            <div>軽減率: ${data.mitigation}%</div>
+        </div>
+        
+        <div style="font-size: 13px; background: rgba(0,0,0,0.5); padding: 10px; border-radius: 8px;">
+            <div style="margin-bottom: 5px;"><span style="color:#aaa;">武器:</span> ${data.weapon}</div>
+            <div><span style="color:#aaa;">防具:</span> ${data.armorName}</div>
+        </div>
+    `;
+};
+
 
 // パーティ一覧UIの更新（別窓用）
 window.updatePartyUI = function() {
@@ -431,8 +475,8 @@ window.initUI = function() {
                 window.addLog(`<span class='color-player'>${myName}:</span> ${text}`, 'chat');
                 
                 // 通信送信
-                if (window.Multiplayer && typeof window.Multiplayer.sendData === 'function') {
-                    window.Multiplayer.sendData({
+                if (window.MultiplayerManager && typeof window.MultiplayerManager.sendData === 'function') {
+                    window.MultiplayerManager.sendData({
                         dataType: 'chat',
                         senderName: myName,
                         text: text
@@ -529,43 +573,5 @@ window.initUI = function() {
 
     if(typeof window.initInventoryUI === 'function') {
         window.initInventoryUI();
-    }
-
-    // =========================================================
-    // ★ マルチプレイ通信イベントの受取とログ・UI反映
-    // =========================================================
-    if (window.Multiplayer) {
-        // --- 1. メッセージ（チャットやデータ）を受信した時 ---
-        const prevOnReceive = window.Multiplayer.onReceiveData;
-        window.Multiplayer.onReceiveData = (data, userId) => {
-            if (prevOnReceive) prevOnReceive(data, userId); 
-            
-            if (data && data.dataType === 'chat') {
-                const senderName = data.senderName || 'プレイヤー';
-                window.addLog(`<span style="color: #aaffaa;">${senderName}:</span> ${data.text}`, 'chat');
-            }
-        };
-
-        // --- 2. 誰かが入室した時 ---
-        const prevOnJoin = window.Multiplayer.onPlayerJoin;
-        window.Multiplayer.onPlayerJoin = (userData) => {
-            if (prevOnJoin) prevOnJoin(userData);
-            
-            const userName = userData.user_name || userData.name || '誰か';
-            window.addLog(`<span class='color-sys'>[入室] ${userName} が部屋に参加しました。</span>`, 'sys');
-            
-            if (typeof window.updatePartyUI === 'function') window.updatePartyUI();
-        };
-
-        // --- 3. 誰かが退室した時 ---
-        const prevOnLeave = window.Multiplayer.onPlayerLeave;
-        window.Multiplayer.onPlayerLeave = (userData) => {
-            if (prevOnLeave) prevOnLeave(userData);
-            
-            const userName = userData.user_name || userData.name || '誰か';
-            window.addLog(`<span class='color-sys'>[退室] ${userName} が部屋を退出しました。</span>`, 'sys');
-            
-            if (typeof window.updatePartyUI === 'function') window.updatePartyUI();
-        };
     }
 };
