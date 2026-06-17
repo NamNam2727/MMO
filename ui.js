@@ -20,7 +20,6 @@ document.addEventListener('pointerdown', () => {
     }
 }, { capture: true, once: true });
 
-
 // =========================================================
 // ★ ダブルタップによる画面拡大(ズーム)防止処理 (iOS対策)
 // =========================================================
@@ -66,29 +65,19 @@ function createSettingUI() {
     const uiLayer = document.getElementById('ui-layer');
     if (!uiLayer) return;
 
-    // ★追加: スライダーを「タップ無効・ドラッグ専用」にするための特殊CSSを動的に追加
-    if (!document.getElementById('settingUiStyles')) {
-        const style = document.createElement('style');
-        style.id = 'settingUiStyles';
-        style.innerHTML = `
-            input[type="range"].drag-only-slider {
-                pointer-events: none;
-            }
-            input[type="range"].drag-only-slider::-webkit-slider-thumb {
-                pointer-events: auto;
-            }
-            input[type="range"].drag-only-slider::-moz-range-thumb {
-                pointer-events: auto;
-            }
-        `;
-        document.head.appendChild(style);
+    // ★修正: プレイヤーウィジェットの実際の高さを動的に取得し、それに合わせる（復元）
+    let widgetTop = '84px';
+    const pWidget = document.getElementById('playerWidget');
+    if (pWidget) {
+        const computedStyle = window.getComputedStyle(pWidget);
+        widgetTop = computedStyle.top || pWidget.style.top || '84px';
     }
 
-    // ★修正: 設定ボタンの高さを playerWidget と同じ「84px」に固定
+    // 設定ボタン (画面右上)
     const settingBtn = document.createElement('button');
     settingBtn.id = 'settingBtn';
     settingBtn.innerHTML = '⚙️';
-    settingBtn.style.cssText = 'position: absolute; right: 15px; top: 84px; width: 44px; height: 44px; border-radius: 50%; background-color: rgba(40, 50, 60, 0.8); color: white; font-size: 20px; border: 2px solid rgba(255, 255, 255, 0.8); pointer-events: auto; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: center; z-index: 60;';
+    settingBtn.style.cssText = `position: absolute; right: 15px; top: ${widgetTop}; width: 44px; height: 44px; border-radius: 50%; background-color: rgba(40, 50, 60, 0.8); color: white; font-size: 20px; border: 2px solid rgba(255, 255, 255, 0.8); pointer-events: auto; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: center; z-index: 60;`;
     
     settingBtn.addEventListener('pointerdown', (e) => {
         e.stopPropagation();
@@ -105,7 +94,7 @@ function createSettingUI() {
     settingWin.style.cssText = 'position: absolute; top: 20%; left: 50%; transform: translateX(-50%); width: 280px; background-color: rgba(20,20,30,0.95); border: 2px solid #777; border-radius: 8px; display: none; flex-direction: column; pointer-events: auto; color: white; padding: 15px; box-sizing: border-box; z-index: 85; box-shadow: 0 10px 20px rgba(0,0,0,0.8);';
     
     const header = document.createElement('div');
-    header.innerHTML = '<span>設定</span><span id="closeSettingBtn" style="cursor:pointer;">❌</span>';
+    header.innerHTML = '<span>設定</span><span id="closeSettingBtn" style="cursor:pointer; padding: 0 5px;">❌</span>';
     header.style.cssText = 'display: flex; justify-content: space-between; font-size: 16px; font-weight: bold; border-bottom: 1px solid #555; padding-bottom: 10px; margin-bottom: 15px;';
     
     const content = document.createElement('div');
@@ -115,13 +104,13 @@ function createSettingUI() {
     const volContainer = document.createElement('div');
     volContainer.style.cssText = 'display: flex; flex-direction: column; gap: 5px; font-size: 14px;';
     
-    // ★修正: ミュートボタンを押しやすくボタン風にし、スライダーの上に配置
     const volLabelContainer = document.createElement('div');
-    volLabelContainer.style.cssText = 'display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;';
+    volLabelContainer.style.cssText = 'display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;';
     
     const volLabel = document.createElement('div');
     volLabel.innerHTML = 'マスター音量: <span id="volValueDisplay">50%</span>';
     
+    // ミュートボタン
     const muteBtn = document.createElement('div');
     muteBtn.innerHTML = '🔊';
     muteBtn.style.cssText = 'cursor: pointer; font-size: 20px; user-select: none; width: 40px; height: 30px; display: flex; justify-content: center; align-items: center; background: rgba(255,255,255,0.1); border: 1px solid #777; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.3); pointer-events: auto;';
@@ -129,54 +118,94 @@ function createSettingUI() {
     volLabelContainer.appendChild(volLabel);
     volLabelContainer.appendChild(muteBtn);
     
-    // ★修正: タップでは動かずドラッグ専用になるCSSクラス「drag-only-slider」を付与
-    const volSlider = document.createElement('input');
-    volSlider.type = 'range';
-    volSlider.min = '0';
-    volSlider.max = '100';
-    volSlider.value = '50';
-    volSlider.className = 'drag-only-slider';
-    volSlider.style.cssText = 'width: 100%;';
+    // ★修正: タップで飛ばず、ドラッグ専用の「カスタムスライダー」をDIVで作成
+    const sliderBg = document.createElement('div');
+    sliderBg.style.cssText = 'position: relative; width: 100%; height: 12px; background: rgba(0,0,0,0.6); border-radius: 6px; border: 1px solid #555; touch-action: none; margin-top: 10px; pointer-events: auto;';
     
-    // ミュート状態の管理
+    const sliderFill = document.createElement('div');
+    sliderFill.style.cssText = 'position: absolute; top: 0; left: 0; height: 100%; width: 50%; background: #00ffff; border-radius: 5px; pointer-events: none; transition: background-color 0.2s;';
+    
+    const sliderThumb = document.createElement('div');
+    // つまみを少し大きくして掴みやすくする
+    sliderThumb.style.cssText = 'position: absolute; top: -9px; left: 50%; width: 30px; height: 30px; background: #fff; border-radius: 50%; transform: translateX(-50%); box-shadow: 0 2px 6px rgba(0,0,0,0.8); cursor: grab; touch-action: none; pointer-events: auto;';
+    
+    sliderBg.appendChild(sliderFill);
+    sliderBg.appendChild(sliderThumb);
+
+    // カスタムスライダーのロジック
     let isMuted = false;
     let savedVol = 50;
+    let currentVol = 50;
+    let isDragging = false;
 
+    function updateSliderVisuals(val) {
+        sliderFill.style.width = val + '%';
+        sliderThumb.style.left = val + '%';
+        document.getElementById('volValueDisplay').innerText = Math.round(val) + '%';
+    }
+
+    function setVolumeVal(val) {
+        currentVol = Math.max(0, Math.min(100, val));
+        updateSliderVisuals(currentVol);
+        if (window.AudioManager && !isMuted) {
+            window.AudioManager.setVolume(currentVol / 100);
+        }
+    }
+
+    // つまみをタップした時のみドラッグ開始
+    sliderThumb.addEventListener('pointerdown', (e) => {
+        e.stopPropagation();
+        isDragging = true;
+        sliderThumb.style.cursor = 'grabbing';
+    });
+
+    // 画面のどこを指が動いてもスライダーが追従する
+    window.addEventListener('pointermove', (e) => {
+        if (!isDragging) return;
+        const rect = sliderBg.getBoundingClientRect();
+        let x = e.clientX - rect.left;
+        let percentage = (x / rect.width) * 100;
+        percentage = Math.max(0, Math.min(100, percentage));
+        
+        if (isMuted) {
+            // ドラッグしたら自動でミュート解除
+            isMuted = false;
+            muteBtn.innerHTML = '🔊';
+            muteBtn.style.background = 'rgba(255,255,255,0.1)';
+            sliderFill.style.background = '#00ffff';
+        }
+        
+        setVolumeVal(percentage);
+    });
+
+    window.addEventListener('pointerup', (e) => {
+        if (isDragging) {
+            isDragging = false;
+            sliderThumb.style.cursor = 'grab';
+        }
+    });
+
+    // ミュートボタンの処理
     muteBtn.addEventListener('pointerdown', (e) => {
         e.stopPropagation();
         isMuted = !isMuted;
         if (isMuted) {
-            savedVol = volSlider.value; // 現在の音量を保存
+            savedVol = currentVol;
             muteBtn.innerHTML = '🔇';
-            volSlider.value = 0;
+            muteBtn.style.background = 'rgba(255,50,50,0.3)';
+            sliderFill.style.background = '#555';
             document.getElementById('volValueDisplay').innerText = '0%';
             if (window.AudioManager) window.AudioManager.setVolume(0);
-            muteBtn.style.background = 'rgba(255,50,50,0.3)'; // ミュート時は少し赤く
         } else {
             muteBtn.innerHTML = '🔊';
-            volSlider.value = savedVol;
-            document.getElementById('volValueDisplay').innerText = savedVol + '%';
-            if (window.AudioManager) window.AudioManager.setVolume(savedVol / 100);
             muteBtn.style.background = 'rgba(255,255,255,0.1)';
-        }
-    });
-
-    volSlider.addEventListener('input', (e) => {
-        // スライダーを手動で動かした場合はミュートを強制解除
-        if (isMuted) {
-            isMuted = false;
-            muteBtn.innerHTML = '🔊';
-            muteBtn.style.background = 'rgba(255,255,255,0.1)';
-        }
-        const val = e.target.value;
-        document.getElementById('volValueDisplay').innerText = val + '%';
-        if (window.AudioManager) {
-            window.AudioManager.setVolume(val / 100);
+            sliderFill.style.background = '#00ffff';
+            setVolumeVal(savedVol);
         }
     });
 
     volContainer.appendChild(volLabelContainer);
-    volContainer.appendChild(volSlider);
+    volContainer.appendChild(sliderBg);
     content.appendChild(volContainer);
 
     settingWin.appendChild(header);
@@ -188,7 +217,6 @@ function createSettingUI() {
         settingWin.style.display = 'none';
     });
 }
-
 
 // =========================================================
 // ★ UI初期化の統合ハブ
