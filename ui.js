@@ -1,9 +1,7 @@
 // =========================================================
 // ui.js
-// ステータス画面、統合ログなどの基本UI制御
+// 画面全体のUI制御、および各UIモジュールの初期化ハブ
 // =========================================================
-
-window.tempStats = { str: 0, int: 0, vit: 0 }; // 仮振り用のステータス保持
 
 // =========================================================
 // ★ ブラウザの音量制限解除（初回タップ検知）
@@ -64,75 +62,18 @@ document.addEventListener('pointerdown', (e) => {
     }
 }, { capture: true });
 
-// =========================================================
-// ★ ログシステム制御
-// =========================================================
-window.getEntityName = function(entity) {
-    if (!entity) return "";
-    return entity.id === 'p1' ? "<span class='color-player'>プレイヤー</span>" : "<span class='color-enemy'>モンスター</span>";
-};
-
-window.addLog = function(htmlText, type = 'sys') {
-    const fullLogContent = document.getElementById('fullLogContent');
-    if (!fullLogContent) return; 
-
-    const fullLine = document.createElement('div');
-    fullLine.className = `full-log-line log-type-${type}`;
-    fullLine.innerHTML = htmlText;
-    fullLogContent.appendChild(fullLine);
-    fullLogContent.scrollTop = fullLogContent.scrollHeight; 
-
-    if (type === 'chat') {
-        const chatLogContent = document.getElementById('chatLogContent');
-        if (chatLogContent) {
-            const chatLine = document.createElement('div');
-            chatLine.className = `full-log-line log-type-${type}`;
-            chatLine.innerHTML = htmlText;
-            chatLogContent.appendChild(chatLine);
-            chatLogContent.scrollTop = chatLogContent.scrollHeight;
-        }
-    }
-
-    const floatingLog = document.getElementById('floatingLog');
-    if (!floatingLog) return;
-    
-    const floatLine = document.createElement('div');
-    floatLine.className = `log-line log-type-${type}`;
-    floatLine.innerHTML = htmlText;
-    floatingLog.appendChild(floatLine);
-
-    const removeFloatLine = () => {
-        if(!floatLine.classList.contains('fade-out')) {
-            floatLine.classList.add('fade-out');
-            setTimeout(() => { if (floatLine.parentNode) floatLine.remove(); }, 500); 
-        }
-    };
-    floatLine.timerId = setTimeout(removeFloatLine, 5000);
-
-    const activeLines = Array.from(floatingLog.children).filter(child => !child.classList.contains('fade-out'));
-    if (activeLines.length > 5) {
-        const oldest = activeLines[0];
-        clearTimeout(oldest.timerId); 
-        if(!oldest.classList.contains('fade-out')) {
-            oldest.classList.add('fade-out');
-            setTimeout(() => { if (oldest.parentNode) oldest.remove(); }, 500);
-        }
-    }
-};
 
 // =========================================================
-// ★ HTMLを触らずに動的にDOMを生成する処理（設定・パーティ等）
+// ★ HTMLを触らずに動的にDOMを生成する処理（設定画面）
 // =========================================================
-
 function createSettingUI() {
     const uiLayer = document.getElementById('ui-layer');
     if (!uiLayer) return;
 
-    // 設定ボタン (画面右上、ステータスUIと同じくらいの高さ)
+    // 設定ボタン (画面右上)
     const settingBtn = document.createElement('button');
     settingBtn.id = 'settingBtn';
     settingBtn.innerHTML = '⚙️';
-    // left ではなく right に配置し、他のUIと被らないようにする
     settingBtn.style.cssText = 'position: absolute; right: 15px; top: 84px; width: 44px; height: 44px; border-radius: 50%; background-color: rgba(40, 50, 60, 0.8); color: white; font-size: 20px; border: 2px solid rgba(255, 255, 255, 0.8); pointer-events: auto; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: center; z-index: 60;';
     
     settingBtn.addEventListener('pointerdown', (e) => {
@@ -193,187 +134,21 @@ function createSettingUI() {
 }
 
 
-function createDynamicPartyUI() {
-    const uiLayer = document.getElementById('ui-layer');
-    if (!uiLayer) return;
-
-    // 1. メンバー表示ボタンの作成 (バッグボタンの左側へ移動)
-    const memberBtn = document.createElement('button');
-    memberBtn.id = 'memberBtn';
-    memberBtn.innerText = 'メンバー';
-    memberBtn.style.cssText = 'position: absolute; right: 75px; bottom: 90px; width: 50px; height: 50px; border-radius: 10px; background-color: rgba(255, 140, 0, 0.7); color: white; font-size: 11px; font-weight: bold; border: 3px solid rgba(255, 255, 255, 0.8); pointer-events: auto; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.3); -webkit-tap-highlight-color: transparent; display: flex; justify-content: center; align-items: center; z-index: 50;';
-    
-    memberBtn.addEventListener('pointerdown', (e) => {
-        e.stopPropagation();
-        const win = document.getElementById('partyListWindow');
-        if (win) {
-            win.style.display = (win.style.display === 'flex') ? 'none' : 'flex';
-        }
-    });
-    uiLayer.appendChild(memberBtn);
-
-    // 2. パーティ一覧ウィンドウの作成
-    const partyWin = document.createElement('div');
-    partyWin.id = 'partyListWindow';
-    partyWin.style.cssText = 'position: absolute; top: 15%; left: 10%; width: 80%; max-height: 70%; background-color: rgba(20,20,20,0.95); border: 2px solid #777; border-radius: 8px; display: none; flex-direction: column; pointer-events: auto; color: white; padding: 15px; box-sizing: border-box; overflow-y: auto; z-index: 75; box-shadow: 0 10px 20px rgba(0,0,0,0.7);';
-    
-    const pHeader = document.createElement('div');
-    pHeader.innerHTML = '<span>ルームメンバー</span><span id="closePartyBtn" style="cursor:pointer;">❌</span>';
-    pHeader.style.cssText = 'display: flex; justify-content: space-between; font-size: 16px; font-weight: bold; border-bottom: 1px solid #555; padding-bottom: 10px; margin-bottom: 10px;';
-    
-    const pList = document.createElement('div');
-    pList.id = 'partyDynamicList';
-    pList.style.cssText = 'display: flex; flex-direction: column; gap: 8px; overflow-y: auto;';
-
-    partyWin.appendChild(pHeader);
-    partyWin.appendChild(pList);
-    uiLayer.appendChild(partyWin);
-
-    pHeader.querySelector('#closePartyBtn').addEventListener('pointerdown', (e) => {
-        e.stopPropagation();
-        partyWin.style.display = 'none';
-    });
-
-    // 3. 他プレイヤーステータスウィンドウの作成
-    const otherStatWin = document.createElement('div');
-    otherStatWin.id = 'otherPlayerStatusWindow';
-    otherStatWin.style.cssText = 'position: absolute; top: 20%; left: 5%; width: 90%; max-height: 60%; background-color: rgba(30,40,50,0.95); border: 2px solid #55a; border-radius: 8px; display: none; flex-direction: column; pointer-events: auto; color: white; padding: 15px; box-sizing: border-box; overflow-y: auto; z-index: 80; box-shadow: 0 10px 20px rgba(0,0,0,0.8);';
-    
-    const oHeader = document.createElement('div');
-    oHeader.innerHTML = '<span id="oStatName">プレイヤー名</span><span id="closeOtherStatBtn" style="cursor:pointer;">❌</span>';
-    oHeader.style.cssText = 'display: flex; justify-content: space-between; font-size: 16px; font-weight: bold; border-bottom: 1px solid #55a; padding-bottom: 10px; margin-bottom: 10px;';
-    
-    const oContent = document.createElement('div');
-    oContent.id = 'oStatContent';
-    oContent.style.cssText = 'font-size: 13px; line-height: 1.5; color: #ddd;';
-    
-    otherStatWin.appendChild(oHeader);
-    otherStatWin.appendChild(oContent);
-    uiLayer.appendChild(otherStatWin);
-
-    oHeader.querySelector('#closeOtherStatBtn').addEventListener('pointerdown', (e) => {
-        e.stopPropagation();
-        otherStatWin.style.display = 'none';
-    });
-
-    // 古いパーティUIを非表示にする
-    const oldPartyWidget = document.getElementById('partyWidget');
-    if (oldPartyWidget) oldPartyWidget.style.display = 'none';
-}
-
-// 他プレイヤーの行をタップした時の処理
-window.showOtherPlayerStatus = function(user) {
-    const win = document.getElementById('otherPlayerStatusWindow');
-    if (!win) return;
-
-    const nameEl = document.getElementById('oStatName');
-    const contentEl = document.getElementById('oStatContent');
-    
-    const avatarUrl = user.portrait || user.portait || '';
-    const userName = user.user_name || user.name || 'Player';
-
-    nameEl.innerText = `${userName} のステータス`;
-
-    contentEl.innerHTML = `
-        <div style="display: flex; align-items: center; margin-bottom: 15px; background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px;">
-            <div style="width: 50px; height: 50px; border-radius: 50%; background-color: #555; border: 2px solid #fff; background-image: url(${avatarUrl}); background-size: cover; background-position: center; margin-right: 15px;"></div>
-            <div>
-                <div style="font-weight: bold; color: white; font-size: 16px;">LV: ???</div>
-            </div>
-        </div>
-        <div style="text-align: center; color: #aaa; padding: 20px; border: 1px dashed #555; border-radius: 8px;">
-            ステータスデータを取得しています...
-        </div>
-    `;
-
-    win.style.display = 'flex';
-    
-    if (window.MultiplayerManager && typeof window.MultiplayerManager.requestStatus === 'function') {
-        window.MultiplayerManager.requestStatus(user.user_id);
-    }
-};
-
-window.updateOtherPlayerStatusUI = function(data) {
-    const win = document.getElementById('otherPlayerStatusWindow');
-    const contentEl = document.getElementById('oStatContent');
-    if (!win || win.style.display === 'none' || !contentEl) return;
-    
-    let avatarUrl = '';
-    if (window.MultiplayerManager && window.MultiplayerManager.otherPlayers[data.userId]) {
-        avatarUrl = window.MultiplayerManager.otherPlayers[data.userId].avatar || '';
-    }
-
-    contentEl.innerHTML = `
-        <div style="display: flex; align-items: center; margin-bottom: 10px; background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px;">
-            <div style="width: 50px; height: 50px; border-radius: 50%; background-color: #555; border: 2px solid #fff; background-image: url(${avatarUrl}); background-size: cover; background-position: center; margin-right: 15px;"></div>
-            <div>
-                <div style="font-weight: bold; color: white; font-size: 16px;">LV: ${data.level}</div>
-                <div style="color: #aaa; font-size: 11px;">EXP: ${data.exp}</div>
-            </div>
-        </div>
-        
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 13px; background: rgba(0,0,0,0.5); padding: 10px; border-radius: 8px; margin-bottom: 10px;">
-            <div>ちから: <span style="color:#ff0">${data.str}</span></div>
-            <div>まりょく: <span style="color:#ff0">${data.int}</span></div>
-            <div>たいりょく: <span style="color:#ff0">${data.vit}</span></div>
-            <div></div>
-            <div>HP: ${data.hp} / ${data.maxHp}</div>
-            <div>MP: ${data.mp} / ${data.maxMp}</div>
-            <div>ATK: ${data.atk}</div>
-            <div>MATK: ${data.matk}</div>
-            <div>防御: ${data.armor}</div>
-            <div>軽減率: ${data.mitigation}%</div>
-        </div>
-        
-        <div style="font-size: 13px; background: rgba(0,0,0,0.5); padding: 10px; border-radius: 8px;">
-            <div style="margin-bottom: 5px;"><span style="color:#aaa;">武器:</span> ${data.weapon}</div>
-            <div><span style="color:#aaa;">防具:</span> ${data.armorName}</div>
-        </div>
-    `;
-};
-
-
-window.updatePartyUI = function() {
-    const pList = document.getElementById('partyDynamicList');
-    if (!pList) return;
-    pList.innerHTML = '';
-    
-    if (!window.GameState || !window.GameState.roomUsers || !window.GameState.userInfo) return;
-
-    const others = window.GameState.roomUsers.filter(u => u.user_id !== window.GameState.userInfo.user_id);
-
-    if (others.length === 0) {
-        pList.innerHTML = '<div style="color:#777; text-align:center; padding: 20px 0; font-size: 12px;">ルームに他のメンバーはいません。</div>';
-        return;
-    }
-
-    others.forEach(user => {
-        const div = document.createElement('div');
-        div.style.cssText = 'display: flex; align-items: center; background: rgba(255,255,255,0.05); padding: 8px; border-radius: 8px; cursor: pointer; border: 1px solid transparent; transition: all 0.2s;';
-        
-        const avatarUrl = user.portrait || user.portait || ''; 
-        
-        div.innerHTML = `
-            <div style="width: 36px; height: 36px; border-radius: 50%; background-color: #555; border: 1px solid #fff; background-image: url(${avatarUrl}); background-size: cover; background-position: center;"></div>
-            <div style="margin-left: 12px; font-weight: bold; font-size: 14px; flex: 1;">${user.user_name || user.name || 'Player'}</div>
-            <div style="color: #aaa; font-size: 12px;">🔍詳細</div>
-        `;
-        
-        div.addEventListener('pointerdown', (e) => {
-            e.stopPropagation();
-            window.showOtherPlayerStatus(user);
-        });
-
-        pList.appendChild(div);
-    });
-};
-
-
+// =========================================================
+// ★ UI初期化の統合ハブ
+// =========================================================
 window.initUI = function() {
-    // ★ HTMLを触らずに動的UIを生成する
-    createDynamicPartyUI();
-    createSettingUI(); // ★追加: 設定UIの生成
+    
+    // 自身の動的UIを生成
+    createSettingUI();
 
+    // 各分離先モジュールの初期化を呼び出す
+    if (typeof window.initStatusUI === 'function') window.initStatusUI();
+    if (typeof window.initChatSystem === 'function') window.initChatSystem();
+    if (typeof window.initMultiplayerUI === 'function') window.initMultiplayerUI();
+    if (typeof window.initInventoryUI === 'function') window.initInventoryUI();
+
+    // 既存UIのZ-index等レイアウト調整
     const pWidget = document.getElementById('playerWidget');
     if (pWidget) pWidget.style.setProperty('z-index', '60', 'important');
     const sWindow = document.getElementById('statusWindow');
@@ -394,8 +169,7 @@ window.initUI = function() {
         }
     }
 
-    if (typeof window.updatePartyUI === 'function') window.updatePartyUI();
-
+    // ウィジェット（左上）の更新関数
     window.updateWidgetUI = function() {
         if (!window.player) return;
         const player = window.player;
@@ -409,84 +183,7 @@ window.initUI = function() {
         if (expBar) expBar.style.width = Math.max(0, (player.exp / player.nextExp) * 100) + '%';
     };
 
-    window.updateStatusUI = function() {
-        if (!window.player) return;
-        const player = window.player;
-        const tempStats = window.tempStats;
-
-        document.getElementById('statLvNum').innerText = player.level;
-        document.getElementById('statExp').innerText = player.exp;
-        document.getElementById('statNextExp').innerText = player.nextExp;
-        document.getElementById('statPoints').innerText = player.statPoints;
-        
-        const remainingPoints = player.statPoints - (tempStats.str + tempStats.int + tempStats.vit);
-        document.getElementById('statPointsPreview').innerText = remainingPoints;
-
-        document.getElementById('statStr').innerText = player.stats.str;
-        document.getElementById('tempStr').innerText = tempStats.str > 0 ? `+${tempStats.str}` : '';
-        document.getElementById('statInt').innerText = player.stats.int;
-        document.getElementById('tempInt').innerText = tempStats.int > 0 ? `+${tempStats.int}` : '';
-        document.getElementById('statVit').innerText = player.stats.vit;
-        document.getElementById('tempVit').innerText = tempStats.vit > 0 ? `+${tempStats.vit}` : '';
-
-        const previewStr = player.stats.str + tempStats.str;
-        const previewInt = player.stats.int + tempStats.int;
-        const previewVit = player.stats.vit + tempStats.vit;
-
-        let previewMaxHp = player.baseHp + (previewVit * 10);
-        if (player.equipped.armor && player.equipped.armor.stats && player.equipped.armor.stats.hp) previewMaxHp += player.equipped.armor.stats.hp;
-        let previewMaxMp = player.baseMp + (previewInt * 5);
-        
-        let previewAtk = player.baseAtk + (previewStr * 2);
-        if (player.equipped.weapon && player.equipped.weapon.stats && player.equipped.weapon.stats.atk) previewAtk += player.equipped.weapon.stats.atk;
-        let previewMatk = player.baseMatk + (previewInt * 2);
-
-        document.getElementById('valHp').innerText = `${Math.floor(player.hp)} / ${player.maxHp}`;
-        document.getElementById('previewHp').innerText = tempStats.vit > 0 ? `(-> ${previewMaxHp})` : '';
-        document.getElementById('valMp').innerText = `${Math.floor(player.mp)} / ${player.maxMp}`;
-        document.getElementById('previewMp').innerText = tempStats.int > 0 ? `(-> ${previewMaxMp})` : '';
-        document.getElementById('valAtk').innerText = player.atk;
-        document.getElementById('previewAtk').innerText = tempStats.str > 0 ? `(-> ${previewAtk})` : '';
-        document.getElementById('valMatk').innerText = player.matk;
-        document.getElementById('previewMatk').innerText = tempStats.int > 0 ? `(-> ${previewMatk})` : '';
-        document.getElementById('valArmor').innerText = player.armor;
-        
-        const mitigation = (player.armor / (100 + player.armor)) * 100;
-        document.getElementById('valMitigation').innerText = mitigation.toFixed(1);
-
-        let elementText = "なし";
-        if (player.equipped.weapon && player.equipped.weapon.element) {
-            const trans = { 'fire':'火', 'ice':'氷', 'lightning':'雷', 'wind':'風', 'earth':'地' };
-            elementText = trans[player.equipped.weapon.element] || player.equipped.weapon.element;
-        }
-        let resistsText = "なし";
-        if (player.equipped.armor && player.equipped.armor.resists) {
-            const trans = { 'fire':'火', 'ice':'氷', 'lightning':'雷', 'wind':'風', 'earth':'地' };
-            resistsText = player.equipped.armor.resists.map(r => trans[r] || r).join(', ');
-        }
-        
-        const valElementsNode = document.getElementById('valElements');
-        if(valElementsNode) {
-            valElementsNode.innerHTML = `武器属性: ${elementText}<br>耐性: ${resistsText}`;
-        }
-
-        const hasPoints = remainingPoints > 0;
-        document.getElementById('btnAddStr').disabled = !hasPoints;
-        document.getElementById('btnAddInt').disabled = !hasPoints;
-        document.getElementById('btnAddVit').disabled = !hasPoints;
-        document.getElementById('btnSubStr').disabled = tempStats.str <= 0;
-        document.getElementById('btnSubInt').disabled = tempStats.int <= 0;
-        document.getElementById('btnSubVit').disabled = tempStats.vit <= 0;
-
-        const isDirty = tempStats.str > 0 || tempStats.int > 0 || tempStats.vit > 0;
-        document.getElementById('btnConfirmStats').disabled = !isDirty;
-        document.getElementById('btnResetStats').disabled = !isDirty;
-    };
-
-    window.getRemainingPoints = function() { 
-        return window.player.statPoints - (window.tempStats.str + window.tempStats.int + window.tempStats.vit); 
-    };
-
+    // 画面下部タブの制御
     let isBottomUIOpen = false;
     let currentBottomTab = null;
 
@@ -533,84 +230,7 @@ window.initUI = function() {
         });
     });
 
-    const chatSendBtn = document.getElementById('chatSendBtn');
-    if (chatSendBtn) {
-        chatSendBtn.addEventListener('pointerdown', (e) => {
-            e.stopPropagation();
-            const input = document.getElementById('chatInput');
-            const text = input.value.trim();
-            if (text) {
-                let myName = 'プレイヤー';
-                const nameElem = document.getElementById('uiPlayerName');
-                if (nameElem && nameElem.innerText && nameElem.innerText !== 'Player Name') {
-                    myName = nameElem.innerText;
-                }
-
-                window.addLog(`<span class='color-player'>${myName}:</span> ${text}`, 'chat');
-                
-                if (window.player) {
-                    window.player.chatMessage = text;
-                    window.player.chatTimer = 5.0; 
-                }
-                
-                if (window.MultiplayerManager && typeof window.MultiplayerManager.sendData === 'function') {
-                    window.MultiplayerManager.sendData({
-                        dataType: 'chat',
-                        senderName: myName,
-                        text: text
-                    });
-                }
-
-                input.value = '';
-            }
-        });
-    }
-
-    document.getElementById('btnAddStr').addEventListener('pointerdown', (e) => { e.stopPropagation(); if(window.getRemainingPoints() > 0){ window.tempStats.str++; window.updateStatusUI(); } });
-    document.getElementById('btnAddInt').addEventListener('pointerdown', (e) => { e.stopPropagation(); if(window.getRemainingPoints() > 0){ window.tempStats.int++; window.updateStatusUI(); } });
-    document.getElementById('btnAddVit').addEventListener('pointerdown', (e) => { e.stopPropagation(); if(window.getRemainingPoints() > 0){ window.tempStats.vit++; window.updateStatusUI(); } });
-
-    document.getElementById('btnSubStr').addEventListener('pointerdown', (e) => { e.stopPropagation(); if(window.tempStats.str>0){window.tempStats.str--; window.updateStatusUI();} });
-    document.getElementById('btnSubInt').addEventListener('pointerdown', (e) => { e.stopPropagation(); if(window.tempStats.int>0){window.tempStats.int--; window.updateStatusUI();} });
-    document.getElementById('btnSubVit').addEventListener('pointerdown', (e) => { e.stopPropagation(); if(window.tempStats.vit>0){window.tempStats.vit--; window.updateStatusUI();} });
-
-    document.getElementById('btnResetStats').addEventListener('pointerdown', (e) => { e.stopPropagation(); window.tempStats = {str:0, int:0, vit:0}; window.updateStatusUI(); });
-    
-    document.getElementById('btnConfirmStats').addEventListener('pointerdown', (e) => { 
-        e.stopPropagation(); 
-        const totalSpent = window.tempStats.str + window.tempStats.int + window.tempStats.vit;
-        if (totalSpent > 0 && window.player.statPoints >= totalSpent) {
-            window.player.stats.str += window.tempStats.str; 
-            window.player.stats.int += window.tempStats.int; 
-            window.player.stats.vit += window.tempStats.vit;
-            window.player.statPoints -= totalSpent; 
-            window.tempStats = {str:0, int:0, vit:0};
-            if(typeof window.updatePlayerStats === 'function') window.updatePlayerStats(); 
-        }
-    });
-
-    document.getElementById('playerWidget').addEventListener('pointerdown', (e) => {
-        const w = document.getElementById('statusWindow');
-        if (w && w.style.display === 'flex') {
-            w.style.display = 'none';
-            window.tempStats = {str:0, int:0, vit:0};
-        } else if (w) { 
-            window.updateStatusUI(); 
-            const pWidget = document.getElementById('playerWidget');
-            if (pWidget) {
-                const rect = pWidget.getBoundingClientRect();
-                w.style.top = rect.top + 'px';
-            }
-            w.style.display = 'flex'; 
-        }
-    }, { passive: true });
-
-    document.getElementById('closeStatusBtn').addEventListener('pointerdown', (e) => { 
-        const w = document.getElementById('statusWindow');
-        if (w) w.style.display = 'none'; 
-        window.tempStats = {str:0, int:0, vit:0};
-    }, { passive: true });
-
+    // アクションボタン
     document.getElementById('attackBtn').addEventListener('pointerdown', (e) => {
         e.stopPropagation(); window.player.targetItem = null; 
         if (window.player.targetEnemy && window.player.targetEnemy.state !== 'dead') {
@@ -642,13 +262,11 @@ window.initUI = function() {
             window.playerPath = window.findPath(window.player.x, window.player.y, closestItem.x, closestItem.y); 
         }
     });
-
-    if(typeof window.initInventoryUI === 'function') {
-        window.initInventoryUI();
-    }
 };
 
-// ★修正: 画面のスクロール・移動操作キャンセル処理に「設定UI」を追加
+// =========================================================
+// ★ 画面全体のスクロール・移動操作キャンセル処理
+// =========================================================
 document.addEventListener('touchmove', function(e) {
     if (window.isDraggingItem) {
         e.preventDefault();
@@ -674,8 +292,8 @@ window.addEventListener('pointerdown', (e) => {
         e.target.closest('#buffDetailWindow') ||
         e.target.closest('#partyListWindow') ||
         e.target.closest('#otherPlayerStatusWindow') ||
-        e.target.closest('#settingWindow') || // ★追加
-        e.target.closest('#settingBtn') ||    // ★追加
+        e.target.closest('#settingWindow') || 
+        e.target.closest('#settingBtn') ||    
         e.target.tagName === 'BUTTON' || 
         e.target.tagName === 'SELECT' || 
         e.target.tagName === 'INPUT') {

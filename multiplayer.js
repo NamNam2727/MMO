@@ -1,36 +1,32 @@
 // =========================================================
 // multiplayer.js
 // ゲーム内のデータ送受信、他プレイヤーの座標・状態管理、
-// パーティ機能のベース、および通信量の最適化を行う
+// パーティ機能のベース、および通信結果を表示するUIの生成
 // =========================================================
 
 window.MultiplayerManager = {
     // --- グローバル状態 ---
-    myPartyId: null, // 将来用: パーティ結成時にIDを入れる
-    
-    // 他プレイヤーのデータを格納する箱
+    myPartyId: null, 
     otherPlayers: {}, 
     
     // --- 通信量削減（エコ）のための変数 ---
     lastSentPos: { x: 0, y: 0 },
     lastSendTime: 0,
-    sendInterval: 100, // 0.1秒に1回しか送信しない
+    sendInterval: 100, 
 
     // ==========================================
-    // 1. データ送信処理 (エコ仕様)
+    // 1. データ送信処理
     // ==========================================
     sendData: function(data) {
         if (window.GameState && window.GameState.isLocalMode) return;
         if (!window.AgentSDK) return;
 
-        // 全ての通信に「自分が今いるマップ」と「パーティID」を必ず付与する
         data.mapId = window.MapManager ? window.MapManager.currentMapId : 'town';
         data.partyId = this.myPartyId;
         
         window.AgentSDK.room.sendMessage({ message: JSON.stringify(data) });
     },
     
-    // 自分の現在位置を強制的に発信する
     forceSendPos: function() {
         if (!window.player) return;
         this.sendData({
@@ -44,26 +40,17 @@ window.MultiplayerManager = {
         this.lastSendTime = performance.now();
     },
 
-    // ★追加: 他プレイヤー全員に位置情報を要求する
     requestPositions: function() {
-        this.sendData({
-            dataType: 'pos_req'
-        });
+        this.sendData({ dataType: 'pos_req' });
     },
 
-    // 他プレイヤーのステータスを要求する
     requestStatus: function(targetUserId) {
-        this.sendData({
-            dataType: 'status_req',
-            targetId: targetUserId
-        });
+        this.sendData({ dataType: 'status_req', targetId: targetUserId });
     },
     
-    // main.js の update() から毎フレーム呼ばれる
     update: function(dt, timestamp) {
         if (!window.player) return;
         
-        // --- 自分の位置情報の送信（動いた時だけ送る） ---
         const dist = Math.hypot(window.player.x - this.lastSentPos.x, window.player.y - this.lastSentPos.y);
         
         if (dist > 5 || window.player.isAutoAttacking) {
@@ -81,7 +68,6 @@ window.MultiplayerManager = {
             }
         }
 
-        // --- 他プレイヤーの滑らかな移動（補間処理） ---
         for (const id in this.otherPlayers) {
             const p = this.otherPlayers[id];
             if (p.x !== undefined && p.targetX !== undefined) {
@@ -93,7 +79,7 @@ window.MultiplayerManager = {
     },
     
     // ==========================================
-    // 2. データ受信処理 (足切りフィルター搭載)
+    // 2. データ受信処理
     // ==========================================
     handleReceive: function(data, senderId) {
         if (data.dataType === 'chat') {
@@ -107,7 +93,6 @@ window.MultiplayerManager = {
             return;
         }
 
-        // ★追加: 位置情報の要求を受信した場合、自分の位置を送信してあげる
         if (data.dataType === 'pos_req') {
             this.forceSendPos();
             return;
@@ -152,7 +137,6 @@ window.MultiplayerManager = {
             return;
         }
         
-        // 足切りフィルター
         const currentMap = window.MapManager ? window.MapManager.currentMapId : 'town';
         const isSameMap = (data.mapId === currentMap);
         const isSameParty = (this.myPartyId !== null && data.partyId === this.myPartyId);
@@ -227,8 +211,6 @@ window.MultiplayerManager = {
                 window.addLog(`<span class='color-sys'>[入室] ${userName} が部屋に参加しました。</span>`, 'sys');
             }
             if (typeof window.updatePartyUI === 'function') window.updatePartyUI();
-            
-            // ★廃止: 入室時の無条件な位置送信処理を削除しました
         }
     },
 
@@ -247,7 +229,6 @@ window.MultiplayerManager = {
             window.GameState.roomUsers.forEach(user => {
                 this.handleJoin(user, true);
             });
-            // ★廃止: 入室時の無条件な位置送信処理を削除しました
         }
     }
 };
@@ -260,3 +241,183 @@ if (window.Multiplayer) {
     
     window.MultiplayerManager.initExistingPlayers();
 }
+
+// =========================================================
+// ★ マルチプレイ関連のUI動的生成・更新ロジック
+// =========================================================
+
+window.initMultiplayerUI = function() {
+    const uiLayer = document.getElementById('ui-layer');
+    if (!uiLayer) return;
+
+    // 1. メンバー表示ボタンの作成
+    const memberBtn = document.createElement('button');
+    memberBtn.id = 'memberBtn';
+    memberBtn.innerText = 'メンバー';
+    memberBtn.style.cssText = 'position: absolute; right: 75px; bottom: 90px; width: 50px; height: 50px; border-radius: 10px; background-color: rgba(255, 140, 0, 0.7); color: white; font-size: 11px; font-weight: bold; border: 3px solid rgba(255, 255, 255, 0.8); pointer-events: auto; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.3); -webkit-tap-highlight-color: transparent; display: flex; justify-content: center; align-items: center; z-index: 50;';
+    
+    memberBtn.addEventListener('pointerdown', (e) => {
+        e.stopPropagation();
+        const win = document.getElementById('partyListWindow');
+        if (win) {
+            win.style.display = (win.style.display === 'flex') ? 'none' : 'flex';
+        }
+    });
+    uiLayer.appendChild(memberBtn);
+
+    // 2. パーティ一覧ウィンドウの作成
+    const partyWin = document.createElement('div');
+    partyWin.id = 'partyListWindow';
+    partyWin.style.cssText = 'position: absolute; top: 15%; left: 10%; width: 80%; max-height: 70%; background-color: rgba(20,20,20,0.95); border: 2px solid #777; border-radius: 8px; display: none; flex-direction: column; pointer-events: auto; color: white; padding: 15px; box-sizing: border-box; overflow-y: auto; z-index: 75; box-shadow: 0 10px 20px rgba(0,0,0,0.7);';
+    
+    const pHeader = document.createElement('div');
+    pHeader.innerHTML = '<span>ルームメンバー</span><span id="closePartyBtn" style="cursor:pointer;">❌</span>';
+    pHeader.style.cssText = 'display: flex; justify-content: space-between; font-size: 16px; font-weight: bold; border-bottom: 1px solid #555; padding-bottom: 10px; margin-bottom: 10px;';
+    
+    const pList = document.createElement('div');
+    pList.id = 'partyDynamicList';
+    pList.style.cssText = 'display: flex; flex-direction: column; gap: 8px; overflow-y: auto;';
+
+    partyWin.appendChild(pHeader);
+    partyWin.appendChild(pList);
+    uiLayer.appendChild(partyWin);
+
+    pHeader.querySelector('#closePartyBtn').addEventListener('pointerdown', (e) => {
+        e.stopPropagation();
+        partyWin.style.display = 'none';
+    });
+
+    // 3. 他プレイヤーステータスウィンドウの作成
+    const otherStatWin = document.createElement('div');
+    otherStatWin.id = 'otherPlayerStatusWindow';
+    otherStatWin.style.cssText = 'position: absolute; top: 20%; left: 5%; width: 90%; max-height: 60%; background-color: rgba(30,40,50,0.95); border: 2px solid #55a; border-radius: 8px; display: none; flex-direction: column; pointer-events: auto; color: white; padding: 15px; box-sizing: border-box; overflow-y: auto; z-index: 80; box-shadow: 0 10px 20px rgba(0,0,0,0.8);';
+    
+    const oHeader = document.createElement('div');
+    oHeader.innerHTML = '<span id="oStatName">プレイヤー名</span><span id="closeOtherStatBtn" style="cursor:pointer;">❌</span>';
+    oHeader.style.cssText = 'display: flex; justify-content: space-between; font-size: 16px; font-weight: bold; border-bottom: 1px solid #55a; padding-bottom: 10px; margin-bottom: 10px;';
+    
+    const oContent = document.createElement('div');
+    oContent.id = 'oStatContent';
+    oContent.style.cssText = 'font-size: 13px; line-height: 1.5; color: #ddd;';
+    
+    otherStatWin.appendChild(oHeader);
+    otherStatWin.appendChild(oContent);
+    uiLayer.appendChild(otherStatWin);
+
+    oHeader.querySelector('#closeOtherStatBtn').addEventListener('pointerdown', (e) => {
+        e.stopPropagation();
+        otherStatWin.style.display = 'none';
+    });
+
+    // 古いパーティUIを非表示にする
+    const oldPartyWidget = document.getElementById('partyWidget');
+    if (oldPartyWidget) oldPartyWidget.style.display = 'none';
+
+    // 初回のUI更新
+    window.updatePartyUI();
+};
+
+window.showOtherPlayerStatus = function(user) {
+    const win = document.getElementById('otherPlayerStatusWindow');
+    if (!win) return;
+
+    const nameEl = document.getElementById('oStatName');
+    const contentEl = document.getElementById('oStatContent');
+    
+    const avatarUrl = user.portrait || user.portait || '';
+    const userName = user.user_name || user.name || 'Player';
+
+    nameEl.innerText = `${userName} のステータス`;
+
+    contentEl.innerHTML = `
+        <div style="display: flex; align-items: center; margin-bottom: 15px; background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px;">
+            <div style="width: 50px; height: 50px; border-radius: 50%; background-color: #555; border: 2px solid #fff; background-image: url(${avatarUrl}); background-size: cover; background-position: center; margin-right: 15px;"></div>
+            <div>
+                <div style="font-weight: bold; color: white; font-size: 16px;">LV: ???</div>
+            </div>
+        </div>
+        <div style="text-align: center; color: #aaa; padding: 20px; border: 1px dashed #555; border-radius: 8px;">
+            ステータスデータを取得しています...
+        </div>
+    `;
+
+    win.style.display = 'flex';
+    
+    if (window.MultiplayerManager && typeof window.MultiplayerManager.requestStatus === 'function') {
+        window.MultiplayerManager.requestStatus(user.user_id);
+    }
+};
+
+window.updateOtherPlayerStatusUI = function(data) {
+    const win = document.getElementById('otherPlayerStatusWindow');
+    const contentEl = document.getElementById('oStatContent');
+    if (!win || win.style.display === 'none' || !contentEl) return;
+    
+    let avatarUrl = '';
+    if (window.MultiplayerManager && window.MultiplayerManager.otherPlayers[data.userId]) {
+        avatarUrl = window.MultiplayerManager.otherPlayers[data.userId].avatar || '';
+    }
+
+    contentEl.innerHTML = `
+        <div style="display: flex; align-items: center; margin-bottom: 10px; background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px;">
+            <div style="width: 50px; height: 50px; border-radius: 50%; background-color: #555; border: 2px solid #fff; background-image: url(${avatarUrl}); background-size: cover; background-position: center; margin-right: 15px;"></div>
+            <div>
+                <div style="font-weight: bold; color: white; font-size: 16px;">LV: ${data.level}</div>
+                <div style="color: #aaa; font-size: 11px;">EXP: ${data.exp}</div>
+            </div>
+        </div>
+        
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 13px; background: rgba(0,0,0,0.5); padding: 10px; border-radius: 8px; margin-bottom: 10px;">
+            <div>ちから: <span style="color:#ff0">${data.str}</span></div>
+            <div>まりょく: <span style="color:#ff0">${data.int}</span></div>
+            <div>たいりょく: <span style="color:#ff0">${data.vit}</span></div>
+            <div></div>
+            <div>HP: ${data.hp} / ${data.maxHp}</div>
+            <div>MP: ${data.mp} / ${data.maxMp}</div>
+            <div>ATK: ${data.atk}</div>
+            <div>MATK: ${data.matk}</div>
+            <div>防御: ${data.armor}</div>
+            <div>軽減率: ${data.mitigation}%</div>
+        </div>
+        
+        <div style="font-size: 13px; background: rgba(0,0,0,0.5); padding: 10px; border-radius: 8px;">
+            <div style="margin-bottom: 5px;"><span style="color:#aaa;">武器:</span> ${data.weapon}</div>
+            <div><span style="color:#aaa;">防具:</span> ${data.armorName}</div>
+        </div>
+    `;
+};
+
+window.updatePartyUI = function() {
+    const pList = document.getElementById('partyDynamicList');
+    if (!pList) return;
+    pList.innerHTML = '';
+    
+    if (!window.GameState || !window.GameState.roomUsers || !window.GameState.userInfo) return;
+
+    const others = window.GameState.roomUsers.filter(u => u.user_id !== window.GameState.userInfo.user_id);
+
+    if (others.length === 0) {
+        pList.innerHTML = '<div style="color:#777; text-align:center; padding: 20px 0; font-size: 12px;">ルームに他のメンバーはいません。</div>';
+        return;
+    }
+
+    others.forEach(user => {
+        const div = document.createElement('div');
+        div.style.cssText = 'display: flex; align-items: center; background: rgba(255,255,255,0.05); padding: 8px; border-radius: 8px; cursor: pointer; border: 1px solid transparent; transition: all 0.2s;';
+        
+        const avatarUrl = user.portrait || user.portait || ''; 
+        
+        div.innerHTML = `
+            <div style="width: 36px; height: 36px; border-radius: 50%; background-color: #555; border: 1px solid #fff; background-image: url(${avatarUrl}); background-size: cover; background-position: center;"></div>
+            <div style="margin-left: 12px; font-weight: bold; font-size: 14px; flex: 1;">${user.user_name || user.name || 'Player'}</div>
+            <div style="color: #aaa; font-size: 12px;">🔍詳細</div>
+        `;
+        
+        div.addEventListener('pointerdown', (e) => {
+            e.stopPropagation();
+            window.showOtherPlayerStatus(user);
+        });
+
+        pList.appendChild(div);
+    });
+};

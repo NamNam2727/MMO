@@ -9,7 +9,7 @@
     // 依存関係を考慮したファイルの読み込み順序
     const scriptsToLoad = [
         'config.js',
-        'audio.js',        // ★新規追加: 音楽の基盤システム
+        'audio.js',        // 音楽の基盤システム
         'skill_db.js',     
         'itemDB.js',
         'utils.js',
@@ -17,10 +17,12 @@
         'entities.js',
         'inventory.js',    
         'shortcut.js',     
-        'ui.js',           
+        'status_ui.js',    // ★追加: ステータス画面制御
+        'chat_system.js',  // ★追加: チャット・ログ制御
+        'ui.js',           // ベースとなるUI制御（これらを呼び出す）
         'skill_create.js', 
         'skill.js',        
-        'multiplayer.js',  
+        'multiplayer.js',  // マルチプレイ・パーティUI
         'main.js'          
     ];
 
@@ -63,14 +65,14 @@
             return;
         }
 
-        // UIボタンのイベントリスナー登録等を実行
+        // UI関連の初期化を実行
         if (typeof window.initUI === 'function') window.initUI();
         if (typeof window.initSkillCreateUI === 'function') window.initSkillCreateUI();
 
         // メインループの開始
         requestAnimationFrame(window.gameLoop);
 
-        // ★初期マップの読み込み 
+        // 初期マップの読み込み 
         if (window.MapManager) {
             window.MapManager.changeMap('town');
         }
