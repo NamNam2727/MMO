@@ -9,18 +9,19 @@
     // 依存関係を考慮したファイルの読み込み順序
     const scriptsToLoad = [
         'config.js',
+        'audio.js',        // ★新規追加: 音楽の基盤システム
         'skill_db.js',     
         'itemDB.js',
         'utils.js',
-        'mapManager.js',   // マップデータ管理と切り替え
+        'mapManager.js',   
         'entities.js',
         'inventory.js',    
         'shortcut.js',     
         'ui.js',           
         'skill_create.js', 
         'skill.js',        
-        'multiplayer.js',  // ★追加: 通信ロジックと他プレイヤー管理
-        'main.js'          // 最後にメインループ
+        'multiplayer.js',  
+        'main.js'          
     ];
 
     let loadedCount = 0;
@@ -70,7 +71,6 @@
         requestAnimationFrame(window.gameLoop);
 
         // ★初期マップの読み込み 
-        // 座標を指定しないことで、mapManagerが自動的にマップ内の「4」の位置を読み取って配置します
         if (window.MapManager) {
             window.MapManager.changeMap('town');
         }

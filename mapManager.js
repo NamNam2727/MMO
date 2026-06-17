@@ -15,11 +15,14 @@ window.MapManager = {
     mapList: {
         'town': {
             name: 'はじまりの街',
-            scriptUrl: 'maps/town/data.js' 
+            scriptUrl: 'maps/town/data.js',
+            bgmUrl: 'maps/town/bgm.js',    // ★追加: BGMの楽譜データファイル
+            bgmGlobal: 'TownBGM'           // ★追加: bgm.js内で定義されるオブジェクト名
         },
         'forest': {
             name: '迷いの森',
             scriptUrl: 'maps/forest/data.js'
+            // 森のBGMができたらここに追記します
         }
     },
 
@@ -148,13 +151,37 @@ window.MapManager = {
         if (typeof window.addLog === 'function') window.addLog(`<span class='color-sys'>${this.mapList[mapId].name} に到着しました。</span>`, 'sys');
 
         // =====================================================
-        // [G] ★追加: マップ構築完了時に、マルチプレイ同期を開始する
+        // [G] マップ構築完了時に、マルチプレイ同期を開始する
         // =====================================================
         if (window.MultiplayerManager) {
-            // ① まず自分が到着した位置をみんなに知らせる
             window.MultiplayerManager.forceSendPos();
-            // ② マップ上にいる他のプレイヤーたちに位置情報を要求する
             window.MultiplayerManager.requestPositions();
+        }
+
+        // =====================================================
+        // [H] ★追加: BGMの読み込みと切り替え処理
+        // =====================================================
+        if (window.AudioManager) {
+            const mapInfo = this.mapList[mapId];
+            if (mapInfo.bgmUrl && mapInfo.bgmGlobal) {
+                // スクリプトが未読み込みの場合はロードする
+                if (!window[mapInfo.bgmGlobal]) {
+                    this.loadScript(mapInfo.bgmUrl, () => {
+                        // ロード完了後、ユーザーが既に画面をタップしていれば再生開始
+                        if (window.hasUserInteracted) {
+                            window.AudioManager.playBGM(window[mapInfo.bgmGlobal]);
+                        }
+                    });
+                } else {
+                    // 既に読み込み済みの場合はそのまま再生
+                    if (window.hasUserInteracted) {
+                        window.AudioManager.playBGM(window[mapInfo.bgmGlobal]);
+                    }
+                }
+            } else {
+                // BGMが設定されていないマップへ移動した場合は止める
+                window.AudioManager.stopBGM();
+            }
         }
     }
 };

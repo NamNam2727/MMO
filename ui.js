@@ -1,10 +1,30 @@
 // =========================================================
 // ui.js
 // ステータス画面、統合ログなどの基本UI制御
-// (インベントリ・ショートカット関連は inventory.js に分離済み)
 // =========================================================
 
 window.tempStats = { str: 0, int: 0, vit: 0 }; // 仮振り用のステータス保持
+
+// =========================================================
+// ★ ブラウザの音量制限解除（初回タップ検知）
+// =========================================================
+window.hasUserInteracted = false;
+document.addEventListener('pointerdown', () => {
+    if (!window.hasUserInteracted) {
+        window.hasUserInteracted = true;
+        if (window.AudioManager && window.MapManager) {
+            // AudioContextを起動状態にする
+            window.AudioManager.init();
+            
+            // 現在のマップのBGMが既にロードされていれば再生を開始する
+            const currentMap = window.MapManager.mapList[window.MapManager.currentMapId];
+            if (currentMap && currentMap.bgmGlobal && window[currentMap.bgmGlobal]) {
+                window.AudioManager.playBGM(window[currentMap.bgmGlobal]);
+            }
+        }
+    }
+}, { capture: true, once: true });
+
 
 // =========================================================
 // ★ ダブルタップによる画面拡大(ズーム)防止処理 (iOS対策)
@@ -101,8 +121,78 @@ window.addLog = function(htmlText, type = 'sys') {
 };
 
 // =========================================================
-// ★ HTMLを触らずに動的にDOMを生成する処理（パーティUI関連）
+// ★ HTMLを触らずに動的にDOMを生成する処理（設定・パーティ等）
 // =========================================================
+
+function createSettingUI() {
+    const uiLayer = document.getElementById('ui-layer');
+    if (!uiLayer) return;
+
+    // 設定ボタン (画面右上、ステータスUIと同じくらいの高さ)
+    const settingBtn = document.createElement('button');
+    settingBtn.id = 'settingBtn';
+    settingBtn.innerHTML = '⚙️';
+    // left ではなく right に配置し、他のUIと被らないようにする
+    settingBtn.style.cssText = 'position: absolute; right: 15px; top: 84px; width: 44px; height: 44px; border-radius: 50%; background-color: rgba(40, 50, 60, 0.8); color: white; font-size: 20px; border: 2px solid rgba(255, 255, 255, 0.8); pointer-events: auto; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: center; z-index: 60;';
+    
+    settingBtn.addEventListener('pointerdown', (e) => {
+        e.stopPropagation();
+        const win = document.getElementById('settingWindow');
+        if (win) {
+            win.style.display = (win.style.display === 'flex') ? 'none' : 'flex';
+        }
+    });
+    uiLayer.appendChild(settingBtn);
+
+    // 設定ウィンドウ
+    const settingWin = document.createElement('div');
+    settingWin.id = 'settingWindow';
+    settingWin.style.cssText = 'position: absolute; top: 20%; left: 50%; transform: translateX(-50%); width: 280px; background-color: rgba(20,20,30,0.95); border: 2px solid #777; border-radius: 8px; display: none; flex-direction: column; pointer-events: auto; color: white; padding: 15px; box-sizing: border-box; z-index: 85; box-shadow: 0 10px 20px rgba(0,0,0,0.8);';
+    
+    const header = document.createElement('div');
+    header.innerHTML = '<span>設定</span><span id="closeSettingBtn" style="cursor:pointer;">❌</span>';
+    header.style.cssText = 'display: flex; justify-content: space-between; font-size: 16px; font-weight: bold; border-bottom: 1px solid #555; padding-bottom: 10px; margin-bottom: 15px;';
+    
+    const content = document.createElement('div');
+    content.style.cssText = 'display: flex; flex-direction: column; gap: 15px;';
+    
+    // マスター音量設定スライダー
+    const volContainer = document.createElement('div');
+    volContainer.style.cssText = 'display: flex; flex-direction: column; gap: 5px; font-size: 14px;';
+    
+    const volLabel = document.createElement('div');
+    volLabel.innerHTML = 'マスター音量: <span id="volValueDisplay">50%</span>';
+    
+    const volSlider = document.createElement('input');
+    volSlider.type = 'range';
+    volSlider.min = '0';
+    volSlider.max = '100';
+    volSlider.value = '50';
+    volSlider.style.cssText = 'width: 100%; cursor: pointer;';
+    
+    volSlider.addEventListener('input', (e) => {
+        const val = e.target.value;
+        document.getElementById('volValueDisplay').innerText = val + '%';
+        if (window.AudioManager) {
+            window.AudioManager.setVolume(val / 100);
+        }
+    });
+
+    volContainer.appendChild(volLabel);
+    volContainer.appendChild(volSlider);
+    content.appendChild(volContainer);
+
+    settingWin.appendChild(header);
+    settingWin.appendChild(content);
+    uiLayer.appendChild(settingWin);
+
+    header.querySelector('#closeSettingBtn').addEventListener('pointerdown', (e) => {
+        e.stopPropagation();
+        settingWin.style.display = 'none';
+    });
+}
+
+
 function createDynamicPartyUI() {
     const uiLayer = document.getElementById('ui-layer');
     if (!uiLayer) return;
@@ -184,7 +274,6 @@ window.showOtherPlayerStatus = function(user) {
 
     nameEl.innerText = `${userName} のステータス`;
 
-    // 取得中の仮表示
     contentEl.innerHTML = `
         <div style="display: flex; align-items: center; margin-bottom: 15px; background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px;">
             <div style="width: 50px; height: 50px; border-radius: 50%; background-color: #555; border: 2px solid #fff; background-image: url(${avatarUrl}); background-size: cover; background-position: center; margin-right: 15px;"></div>
@@ -199,13 +288,11 @@ window.showOtherPlayerStatus = function(user) {
 
     win.style.display = 'flex';
     
-    // multiplayer.js を経由して相手にステータス要求を送信
     if (window.MultiplayerManager && typeof window.MultiplayerManager.requestStatus === 'function') {
         window.MultiplayerManager.requestStatus(user.user_id);
     }
 };
 
-// 受信したステータスデータを画面に反映させる
 window.updateOtherPlayerStatusUI = function(data) {
     const win = document.getElementById('otherPlayerStatusWindow');
     const contentEl = document.getElementById('oStatContent');
@@ -246,7 +333,6 @@ window.updateOtherPlayerStatusUI = function(data) {
 };
 
 
-// パーティ一覧UIの更新（別窓用）
 window.updatePartyUI = function() {
     const pList = document.getElementById('partyDynamicList');
     if (!pList) return;
@@ -254,7 +340,6 @@ window.updatePartyUI = function() {
     
     if (!window.GameState || !window.GameState.roomUsers || !window.GameState.userInfo) return;
 
-    // 自分自身も一覧に表示するかはお好みですが、今回は他人のみとします
     const others = window.GameState.roomUsers.filter(u => u.user_id !== window.GameState.userInfo.user_id);
 
     if (others.length === 0) {
@@ -287,8 +372,8 @@ window.updatePartyUI = function() {
 window.initUI = function() {
     // ★ HTMLを触らずに動的UIを生成する
     createDynamicPartyUI();
+    createSettingUI(); // ★追加: 設定UIの生成
 
-    // ステータス画面を他のウィンドウより確実に前面に出すためのCSS強制適用
     const pWidget = document.getElementById('playerWidget');
     if (pWidget) pWidget.style.setProperty('z-index', '60', 'important');
     const sWindow = document.getElementById('statusWindow');
@@ -309,12 +394,8 @@ window.initUI = function() {
         }
     }
 
-    // 初回パーティリストの描画
     if (typeof window.updatePartyUI === 'function') window.updatePartyUI();
 
-    // ------------------------------------
-    // 左上ウィジェット・ステータス画面の更新関数
-    // ------------------------------------
     window.updateWidgetUI = function() {
         if (!window.player) return;
         const player = window.player;
@@ -406,9 +487,6 @@ window.initUI = function() {
         return window.player.statPoints - (window.tempStats.str + window.tempStats.int + window.tempStats.vit); 
     };
 
-    // ------------------------------------
-    // 左下統合UI（タブ開閉）の制御
-    // ------------------------------------
     let isBottomUIOpen = false;
     let currentBottomTab = null;
 
@@ -455,9 +533,6 @@ window.initUI = function() {
         });
     });
 
-    // =========================================================
-    // ★ マルチプレイチャット送信機能（吹き出し表示追加）
-    // =========================================================
     const chatSendBtn = document.getElementById('chatSendBtn');
     if (chatSendBtn) {
         chatSendBtn.addEventListener('pointerdown', (e) => {
@@ -471,16 +546,13 @@ window.initUI = function() {
                     myName = nameElem.innerText;
                 }
 
-                // 自分の画面左下にログ表示
                 window.addLog(`<span class='color-player'>${myName}:</span> ${text}`, 'chat');
                 
-                // ★追加: 自分のキャラクターに吹き出しを表示させるためのプロパティをセット
                 if (window.player) {
                     window.player.chatMessage = text;
-                    window.player.chatTimer = 5.0; // 5秒間表示
+                    window.player.chatTimer = 5.0; 
                 }
                 
-                // 通信送信
                 if (window.MultiplayerManager && typeof window.MultiplayerManager.sendData === 'function') {
                     window.MultiplayerManager.sendData({
                         dataType: 'chat',
@@ -494,9 +566,6 @@ window.initUI = function() {
         });
     }
 
-    // ------------------------------------
-    // ステータス画面のイベントリスナー
-    // ------------------------------------
     document.getElementById('btnAddStr').addEventListener('pointerdown', (e) => { e.stopPropagation(); if(window.getRemainingPoints() > 0){ window.tempStats.str++; window.updateStatusUI(); } });
     document.getElementById('btnAddInt').addEventListener('pointerdown', (e) => { e.stopPropagation(); if(window.getRemainingPoints() > 0){ window.tempStats.int++; window.updateStatusUI(); } });
     document.getElementById('btnAddVit').addEventListener('pointerdown', (e) => { e.stopPropagation(); if(window.getRemainingPoints() > 0){ window.tempStats.vit++; window.updateStatusUI(); } });
@@ -542,9 +611,6 @@ window.initUI = function() {
         window.tempStats = {str:0, int:0, vit:0};
     }, { passive: true });
 
-    // ------------------------------------
-    // メインアクションボタン
-    // ------------------------------------
     document.getElementById('attackBtn').addEventListener('pointerdown', (e) => {
         e.stopPropagation(); window.player.targetItem = null; 
         if (window.player.targetEnemy && window.player.targetEnemy.state !== 'dead') {
@@ -581,3 +647,39 @@ window.initUI = function() {
         window.initInventoryUI();
     }
 };
+
+// ★修正: 画面のスクロール・移動操作キャンセル処理に「設定UI」を追加
+document.addEventListener('touchmove', function(e) {
+    if (window.isDraggingItem) {
+        e.preventDefault();
+        return;
+    }
+    const isScrollable = e.target.closest('#invContent, #statusWindow, #fullLogContent, #chatLogContent, #debug-console, #partyListWindow, #otherPlayerStatusWindow, #settingWindow');
+    if (!isScrollable) {
+        e.preventDefault();
+    }
+}, { passive: false });
+
+window.addEventListener('pointerdown', (e) => {
+    const itemDetail = document.getElementById('itemDetail');
+    const invWindow = document.getElementById('invWindow');
+    const statWindow = document.getElementById('statusWindow');
+    
+    // UIタップ時には移動指示をキャンセルさせるための判定
+    if ((invWindow && e.target.closest('#invWindow')) || 
+        (itemDetail && e.target.closest('#itemDetail')) || 
+        (statWindow && e.target.closest('#statusWindow')) || 
+        e.target.closest('#playerWidget') || 
+        e.target.closest('#bottomUIContainer') || 
+        e.target.closest('#buffDetailWindow') ||
+        e.target.closest('#partyListWindow') ||
+        e.target.closest('#otherPlayerStatusWindow') ||
+        e.target.closest('#settingWindow') || // ★追加
+        e.target.closest('#settingBtn') ||    // ★追加
+        e.target.tagName === 'BUTTON' || 
+        e.target.tagName === 'SELECT' || 
+        e.target.tagName === 'INPUT') {
+            // イベントバブリングを止める等の処理は main.js 側で行っている前提
+            return;
+        }
+});
