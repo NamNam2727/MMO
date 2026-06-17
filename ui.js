@@ -11,10 +11,7 @@ document.addEventListener('pointerdown', () => {
     if (!window.hasUserInteracted) {
         window.hasUserInteracted = true;
         if (window.AudioManager && window.MapManager) {
-            // AudioContextを起動状態にする
             window.AudioManager.init();
-            
-            // 現在のマップのBGMが既にロードされていれば再生を開始する
             const currentMap = window.MapManager.mapList[window.MapManager.currentMapId];
             if (currentMap && currentMap.bgmGlobal && window[currentMap.bgmGlobal]) {
                 window.AudioManager.playBGM(window[currentMap.bgmGlobal]);
@@ -49,7 +46,6 @@ window.bringToFront = function(windowId) {
     if (conf && conf.style.display !== 'none') conf.style.zIndex = '80';
 };
 
-// アイテム詳細ウィンドウ外（空スロットなど）をタップした際に確実に閉じる処理
 document.addEventListener('pointerdown', (e) => {
     const detail = document.getElementById('itemDetail');
     if (detail && detail.style.display !== 'none') {
@@ -64,17 +60,25 @@ document.addEventListener('pointerdown', (e) => {
 
 
 // =========================================================
-// ★ HTMLを触らずに動的にDOMを生成する処理（設定画面）
+// ★ 動的DOM生成（設定画面・ミュート機能付き）
 // =========================================================
 function createSettingUI() {
     const uiLayer = document.getElementById('ui-layer');
     if (!uiLayer) return;
 
+    // ★修正: プレイヤーウィジェットの実際の高さを取得し、それに合わせる
+    let widgetTop = '84px';
+    const pWidget = document.getElementById('playerWidget');
+    if (pWidget) {
+        const computedStyle = window.getComputedStyle(pWidget);
+        widgetTop = computedStyle.top || pWidget.style.top || '84px';
+    }
+
     // 設定ボタン (画面右上)
     const settingBtn = document.createElement('button');
     settingBtn.id = 'settingBtn';
     settingBtn.innerHTML = '⚙️';
-    settingBtn.style.cssText = 'position: absolute; right: 15px; top: 84px; width: 44px; height: 44px; border-radius: 50%; background-color: rgba(40, 50, 60, 0.8); color: white; font-size: 20px; border: 2px solid rgba(255, 255, 255, 0.8); pointer-events: auto; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: center; z-index: 60;';
+    settingBtn.style.cssText = `position: absolute; right: 15px; top: ${widgetTop}; width: 44px; height: 44px; border-radius: 50%; background-color: rgba(40, 50, 60, 0.8); color: white; font-size: 20px; border: 2px solid rgba(255, 255, 255, 0.8); pointer-events: auto; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: center; z-index: 60;`;
     
     settingBtn.addEventListener('pointerdown', (e) => {
         e.stopPropagation();
@@ -97,12 +101,23 @@ function createSettingUI() {
     const content = document.createElement('div');
     content.style.cssText = 'display: flex; flex-direction: column; gap: 15px;';
     
-    // マスター音量設定スライダー
+    // マスター音量設定コンテナ
     const volContainer = document.createElement('div');
     volContainer.style.cssText = 'display: flex; flex-direction: column; gap: 5px; font-size: 14px;';
     
+    const volLabelContainer = document.createElement('div');
+    volLabelContainer.style.cssText = 'display: flex; justify-content: space-between; align-items: center;';
+    
     const volLabel = document.createElement('div');
     volLabel.innerHTML = 'マスター音量: <span id="volValueDisplay">50%</span>';
+    
+    // ★追加: ミュートボタン
+    const muteBtn = document.createElement('div');
+    muteBtn.innerHTML = '🔊';
+    muteBtn.style.cssText = 'cursor: pointer; font-size: 18px; user-select: none; width: 30px; text-align: right;';
+    
+    volLabelContainer.appendChild(volLabel);
+    volLabelContainer.appendChild(muteBtn);
     
     const volSlider = document.createElement('input');
     volSlider.type = 'range';
@@ -111,7 +126,33 @@ function createSettingUI() {
     volSlider.value = '50';
     volSlider.style.cssText = 'width: 100%; cursor: pointer;';
     
+    // ミュート状態の管理
+    let isMuted = false;
+    let savedVol = 50;
+
+    muteBtn.addEventListener('pointerdown', (e) => {
+        e.stopPropagation();
+        isMuted = !isMuted;
+        if (isMuted) {
+            savedVol = volSlider.value; // 現在の音量を保存
+            muteBtn.innerHTML = '🔇';
+            volSlider.value = 0;
+            document.getElementById('volValueDisplay').innerText = '0%';
+            if (window.AudioManager) window.AudioManager.setVolume(0);
+        } else {
+            muteBtn.innerHTML = '🔊';
+            volSlider.value = savedVol;
+            document.getElementById('volValueDisplay').innerText = savedVol + '%';
+            if (window.AudioManager) window.AudioManager.setVolume(savedVol / 100);
+        }
+    });
+
     volSlider.addEventListener('input', (e) => {
+        // スライダーを手動で動かした場合はミュートを解除する
+        if (isMuted) {
+            isMuted = false;
+            muteBtn.innerHTML = '🔊';
+        }
         const val = e.target.value;
         document.getElementById('volValueDisplay').innerText = val + '%';
         if (window.AudioManager) {
@@ -119,7 +160,7 @@ function createSettingUI() {
         }
     });
 
-    volContainer.appendChild(volLabel);
+    volContainer.appendChild(volLabelContainer);
     volContainer.appendChild(volSlider);
     content.appendChild(volContainer);
 
@@ -297,7 +338,6 @@ window.addEventListener('pointerdown', (e) => {
         e.target.tagName === 'BUTTON' || 
         e.target.tagName === 'SELECT' || 
         e.target.tagName === 'INPUT') {
-            // イベントバブリングを止める等の処理は main.js 側で行っている前提
             return;
         }
 });
