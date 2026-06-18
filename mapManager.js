@@ -16,22 +16,27 @@ window.MapManager = {
         'town': {
             name: 'はじまりの街',
             scriptUrl: 'maps/town/data.js',
-            bgmUrl: 'maps/town/bgm.js',    // ★追加: BGMの楽譜データファイル
-            bgmGlobal: 'TownBGM'           // ★追加: bgm.js内で定義されるオブジェクト名
+            bgmUrl: 'maps/town/bgm.js',    
+            bgmGlobal: 'TownBGM'           
+        },
+        'worldMap': {
+            name: 'ワールドマップ',
+            scriptUrl: 'maps/world/data.js'
+            // ★後日ワールドマップ用のBGM等もここに追加します
         },
         'forest': {
             name: '迷いの森',
             scriptUrl: 'maps/forest/data.js'
-            // 森のBGMができたらここに追記します
         }
     },
 
     mapDataStore: {},
 
     // =====================================================
-    // 2. マップ移動処理 (ワープゾーン等から呼ばれる)
+    // 2. マップ移動処理
+    // 引数: mapId(マップのキー), targetEventId(着地点となるマスのID)
     // =====================================================
-    changeMap: function(mapId, spawnX, spawnY) {
+    changeMap: function(mapId, targetEventId) {
         if (!this.mapList[mapId]) {
             if (typeof window.addLog === 'function') window.addLog("<span class='color-sys'>システムエラー: 存在しないマップです。</span>", 'sys');
             return;
@@ -39,11 +44,13 @@ window.MapManager = {
 
         if (typeof window.addLog === 'function') window.addLog(`<span class='color-sys'>${this.mapList[mapId].name} へ移動中...</span>`, 'sys');
 
+        // 既にデータが読み込み済みかチェック
         if (this.mapDataStore[mapId]) {
-            this.setupMap(mapId, spawnX, spawnY);
+            this.setupMap(mapId, targetEventId);
         } else {
+            // 未読み込みの場合はJSファイルを動的にロード
             this.loadScript(this.mapList[mapId].scriptUrl, () => {
-                this.setupMap(mapId, spawnX, spawnY);
+                this.setupMap(mapId, targetEventId);
             });
         }
     },
@@ -71,16 +78,17 @@ window.MapManager = {
     // =====================================================
     // 4. 読み込んだデータを使ってゲーム内の環境を再構築する
     // =====================================================
-    setupMap: function(mapId, spawnX, spawnY) {
+    setupMap: function(mapId, targetEventId) {
         const data = this.mapDataStore[mapId];
         if (!data) return;
 
         this.currentMapId = mapId;
         
-        const GRID_SIZE = 32; 
+        // ★追加: 2層目のイベントマップと定義リストをグローバルに保持（後で main.js の移動判定で使います）
+        window.currentEventMap = data.eventMap || [];
+        window.currentEvents = data.events || {};
         
-        let defaultSpawnX = null;
-        let defaultSpawnY = null;
+        const GRID_SIZE = 32; 
 
         // [A] ワールドサイズの設定
         if (data.collisionMap && data.collisionMap.length > 0) {
@@ -89,13 +97,12 @@ window.MapManager = {
             window.world.width = gridCols * GRID_SIZE;
             window.world.height = gridRows * GRID_SIZE;
 
-            // [B] 当たり判定（壁）とイベントトリガーの自動生成
+            // [B] 当たり判定（壁）の自動生成
             window.obstacles = [];
             for (let y = 0; y < gridRows; y++) {
                 for (let x = 0; x < gridCols; x++) {
-                    const cell = data.collisionMap[y][x];
-                    
-                    if (cell === 1) { 
+                    // 1層目は純粋に「1(壁)」かどうかだけを見る
+                    if (data.collisionMap[y][x] === 1) { 
                         window.obstacles.push({
                             x: x * GRID_SIZE,
                             y: y * GRID_SIZE,
@@ -103,10 +110,6 @@ window.MapManager = {
                             height: GRID_SIZE,
                             color: 'transparent'
                         });
-                    }
-                    else if (cell === 4) {
-                        defaultSpawnX = x * GRID_SIZE + (GRID_SIZE / 2);
-                        defaultSpawnY = y * GRID_SIZE + (GRID_SIZE / 2);
                     }
                 }
             }
@@ -134,10 +137,37 @@ window.MapManager = {
             window.initPathGrid(window.player.radius);
         }
 
-        // [E] プレイヤーの座標セット
-        let finalSpawnX = spawnX !== undefined ? spawnX : defaultSpawnX;
-        let finalSpawnY = spawnY !== undefined ? spawnY : defaultSpawnY;
+        // [E] プレイヤーの座標セット（イベントIDベースでの着地）
+        let spawnId = targetEventId;
+        
+        // 引数でIDが指定されていなければ、events リストから isDefaultSpawn: true なものを探す
+        if (spawnId === undefined || spawnId === null) {
+            for (const key in window.currentEvents) {
+                if (window.currentEvents[key].isDefaultSpawn) {
+                    spawnId = Number(key);
+                    break;
+                }
+            }
+        }
 
+        let finalSpawnX = null;
+        let finalSpawnY = null;
+
+        // 2層目の eventMap から、着地すべき spawnId のマスを探し出す
+        if (spawnId !== null && window.currentEventMap.length > 0) {
+            for (let y = 0; y < window.currentEventMap.length; y++) {
+                for (let x = 0; x < window.currentEventMap[y].length; x++) {
+                    if (window.currentEventMap[y][x] === spawnId) {
+                        finalSpawnX = x * GRID_SIZE + (GRID_SIZE / 2);
+                        finalSpawnY = y * GRID_SIZE + (GRID_SIZE / 2);
+                        break;
+                    }
+                }
+                if (finalSpawnX !== null) break;
+            }
+        }
+
+        // 見つかった座標へプレイヤーをワープさせる
         if (window.player && finalSpawnX !== null && finalSpawnY !== null) {
             window.player.x = finalSpawnX;
             window.player.y = finalSpawnY;
@@ -146,12 +176,10 @@ window.MapManager = {
             window.player.targetItem = null;
         }
 
-        // [F] NPCや敵のスポーン（将来用）
-
         if (typeof window.addLog === 'function') window.addLog(`<span class='color-sys'>${this.mapList[mapId].name} に到着しました。</span>`, 'sys');
 
         // =====================================================
-        // [G] マップ構築完了時に、マルチプレイ同期を開始する
+        // [F] マップ構築完了時に、マルチプレイ同期を開始する
         // =====================================================
         if (window.MultiplayerManager) {
             window.MultiplayerManager.forceSendPos();
@@ -159,27 +187,23 @@ window.MapManager = {
         }
 
         // =====================================================
-        // [H] ★追加: BGMの読み込みと切り替え処理
+        // [G] BGMの読み込みと切り替え処理
         // =====================================================
         if (window.AudioManager) {
             const mapInfo = this.mapList[mapId];
             if (mapInfo.bgmUrl && mapInfo.bgmGlobal) {
-                // スクリプトが未読み込みの場合はロードする
                 if (!window[mapInfo.bgmGlobal]) {
                     this.loadScript(mapInfo.bgmUrl, () => {
-                        // ロード完了後、ユーザーが既に画面をタップしていれば再生開始
                         if (window.hasUserInteracted) {
                             window.AudioManager.playBGM(window[mapInfo.bgmGlobal]);
                         }
                     });
                 } else {
-                    // 既に読み込み済みの場合はそのまま再生
                     if (window.hasUserInteracted) {
                         window.AudioManager.playBGM(window[mapInfo.bgmGlobal]);
                     }
                 }
             } else {
-                // BGMが設定されていないマップへ移動した場合は止める
                 window.AudioManager.stopBGM();
             }
         }

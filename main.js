@@ -18,15 +18,15 @@ window.addEventListener('contextmenu', (e) => {
     e.preventDefault();
 });
 
-// ==========================================
+// ==========================================-
 // ★ 画面スクロールのスマート抑制処理
-// ==========================================
+// ==========================================-
 document.addEventListener('touchmove', function(e) {
     if (window.isDraggingItem) {
         e.preventDefault();
         return;
     }
-    const isScrollable = e.target.closest('#invContent, #statusWindow, #fullLogContent, #chatLogContent, #debug-console, #partyListWindow, #otherPlayerStatusWindow');
+    const isScrollable = e.target.closest('#invContent, #statusWindow, #fullLogContent, #chatLogContent, #debug-console, #partyListWindow, #otherPlayerStatusWindow, #settingWindow');
     if (!isScrollable) {
         e.preventDefault();
     }
@@ -49,6 +49,8 @@ window.addEventListener('pointerdown', (e) => {
         e.target.closest('#buffDetailWindow') ||
         e.target.closest('#partyListWindow') ||
         e.target.closest('#otherPlayerStatusWindow') ||
+        e.target.closest('#settingWindow') ||
+        e.target.closest('#settingBtn') ||
         e.target.tagName === 'BUTTON' || 
         e.target.tagName === 'SELECT' || 
         e.target.tagName === 'INPUT') return;
@@ -294,6 +296,44 @@ function update(dt, timestamp) {
         if (currentDistanceToWaypoint >= initialDistanceToWaypoint - 0.5) window.playerPath.shift();
     }
 
+    // ==========================================
+    // ★ イベントマップの踏み判定 (ワープ等)
+    // ==========================================
+    if (!window.player.isWarping && window.currentEventMap && window.currentEvents) {
+        // 現在のピクセル座標から、マス目(グリッド)の座標を計算
+        const gridX = Math.floor(window.player.x / 32);
+        const gridY = Math.floor(window.player.y / 32);
+        
+        // 配列の範囲内かチェック
+        if (window.currentEventMap[gridY] && window.currentEventMap[gridY][gridX]) {
+            const eventId = window.currentEventMap[gridY][gridX];
+            
+            // マスにイベントID(1以上)が設定されているか
+            if (eventId > 0) {
+                const eventDef = window.currentEvents[eventId];
+                
+                if (eventDef && eventDef.type === 'warp') {
+                    // ワープ重複処理を防ぐためのロックをかける
+                    window.player.isWarping = true;
+                    
+                    // 移動指示をすべてキャンセル
+                    window.playerPath = [];
+                    input.isDown = false;
+                    
+                    // マップマネージャーに移動を指示
+                    if (window.MapManager) {
+                        window.MapManager.changeMap(eventDef.targetMap, eventDef.targetId);
+                    }
+                    
+                    // 次のマップに配置が終わる頃（1秒後）にロックを解除する
+                    setTimeout(() => { 
+                        if (window.player) window.player.isWarping = false; 
+                    }, 1000);
+                }
+            }
+        }
+    }
+
     // カメラ追従
     const screenX = window.player.x - window.camera.x; const screenY = window.player.y - window.camera.y;
     const centerX = window.camera.width / 2; const centerY = window.camera.height / 2;
@@ -363,19 +403,16 @@ function drawStatusEffects(entity, ctx) {
     drawStatusIcons(entity, ctx);
 }
 
-// ★修正: チャット吹き出し（サイズ拡大、改行対応）
 function drawChatBubble(ctx, x, y, text) {
     if (!text) return;
     ctx.save();
     
-    // 文字設定（大きく太く）
     ctx.font = 'bold 14px sans-serif'; 
     
-    const maxWidth = 220; // ログウィンドウ横幅と同等
+    const maxWidth = 220; 
     const padding = 10;
     const lineHeight = 18;
     
-    // --- 日本語の改行処理 ---
     const words = text.split('');
     let currentLine = '';
     const lines = [];
@@ -392,7 +429,6 @@ function drawChatBubble(ctx, x, y, text) {
     }
     lines.push(currentLine);
     
-    // 枠の最大幅を計算
     let maxLineWidth = 0;
     for (const l of lines) {
         const w = ctx.measureText(l).width;
@@ -402,17 +438,14 @@ function drawChatBubble(ctx, x, y, text) {
     const boxWidth = maxLineWidth + padding * 2;
     const boxHeight = lines.length * lineHeight + padding * 2;
     
-    // 吹き出しの位置（キャラクターの頭上より少し上）
     const boxY = y - boxHeight - 15; 
     const boxX = x - boxWidth / 2;
 
-    // 吹き出し背景
     ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
     ctx.strokeStyle = '#333';
     ctx.lineWidth = 1.5;
     ctx.lineJoin = 'round';
     
-    // 角丸矩形としっぽ
     const radius = 8;
     ctx.beginPath();
     ctx.moveTo(boxX + radius, boxY);
@@ -434,7 +467,6 @@ function drawChatBubble(ctx, x, y, text) {
     ctx.fill();
     ctx.stroke();
 
-    // テキスト描画
     ctx.fillStyle = '#000';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
@@ -538,10 +570,6 @@ function draw() {
         ctx.beginPath(); ctx.arc(window.player.targetX, window.player.targetY, 5, 0, Math.PI * 2); ctx.fillStyle = 'rgba(255, 255, 255, 0.5)'; ctx.fill();
     }
 
-
-    // ==========================================
-    // ★ 他プレイヤーの描画 (マルチプレイ対応)
-    // ==========================================
     if (window.MultiplayerManager) {
         for (const id in window.MultiplayerManager.otherPlayers) {
             const p = window.MultiplayerManager.otherPlayers[id];
@@ -555,7 +583,6 @@ function draw() {
             
             if (p.image && p.image.complete && p.image.naturalWidth > 0) {
                 ctx.save();
-                // ★ 描画品質の向上 (アイコンの潰れ対策)
                 ctx.imageSmoothingEnabled = true;
                 ctx.imageSmoothingQuality = 'high';
                 ctx.clip(); 
@@ -574,14 +601,13 @@ function draw() {
                 ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke();
             }
 
-            // ★修正: 名前の表示を見やすく大きくする
             ctx.fillStyle = 'white';
             ctx.font = 'bold 13px sans-serif'; 
             ctx.textAlign = 'center';
             ctx.textBaseline = 'bottom';
-            ctx.lineJoin = 'round'; // 縁取りの角を丸くして潰れを防ぐ
+            ctx.lineJoin = 'round'; 
             ctx.miterLimit = 2;
-            ctx.lineWidth = 3;      // 縁取りを少し太く
+            ctx.lineWidth = 3;      
             ctx.strokeStyle = 'black';
             ctx.strokeText(p.name, p.x, p.y - radius - 5);
             ctx.fillText(p.name, p.x, p.y - radius - 5);
@@ -592,9 +618,6 @@ function draw() {
         }
     }
 
-    // ==========================================
-    // ★ 自分のプレイヤーの描画（アバター画像対応）
-    // ==========================================
     ctx.beginPath(); 
     ctx.arc(window.player.x, window.player.y, window.player.radius, 0, Math.PI * 2);
     
@@ -602,7 +625,6 @@ function draw() {
     
     if (window.playerAvatarImage && window.playerAvatarImage.complete && window.playerAvatarImage.naturalWidth > 0) {
         ctx.save();
-        // ★ 描画品質の向上
         ctx.imageSmoothingEnabled = true;
         ctx.imageSmoothingQuality = 'high';
         ctx.clip(); 

@@ -17,8 +17,8 @@
         'entities.js',
         'inventory.js',    
         'shortcut.js',     
-        'status_ui.js',    // ★追加: ステータス画面制御
-        'chat_system.js',  // ★追加: チャット・ログ制御
+        'status_ui.js',    // ステータス画面制御
+        'chat_system.js',  // チャット・ログ制御
         'ui.js',           // ベースとなるUI制御（これらを呼び出す）
         'skill_create.js', 
         'skill.js',        
@@ -72,7 +72,9 @@
         // メインループの開始
         requestAnimationFrame(window.gameLoop);
 
-        // 初期マップの読み込み 
+        // ★初期マップの読み込み 
+        // 引数に特定のIDを指定しないことで、mapManagerが自動的に
+        // data.js の events に定義された `isDefaultSpawn: true` の場所 (ID: 9) を探して配置します。
         if (window.MapManager) {
             window.MapManager.changeMap('town');
         }
