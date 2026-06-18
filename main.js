@@ -116,21 +116,24 @@ function handlePointerUp(e) {
         const currentTime = performance.now();
         if (currentTime - pointerDownTime < 200) {
             
+            // ★ ロード中ならタップ判定を無効化
+            if (window.isMapLoading) {
+                input.isDown = false;
+                return;
+            }
+
             // ==========================================
             // ★ ワールドマップモードのタップ判定
             // ==========================================
             const isWorldMap = window.MapManager && window.MapManager.currentMapId === 'worldMap';
             
             if (isWorldMap) {
-                // 描画エンジンで計算された「実際の画像の表示領域」を使用する
                 if (window.worldMapRect && window.currentEventMap) {
                     const rect = window.worldMapRect;
                     
-                    // タップした座標が画像の領域内かどうかチェック
                     if (input.screenX >= rect.x && input.screenX <= rect.x + rect.w &&
                         input.screenY >= rect.y && input.screenY <= rect.y + rect.h) {
                         
-                        // 画像内での相対座標
                         const relX = input.screenX - rect.x;
                         const relY = input.screenY - rect.y;
 
@@ -138,7 +141,6 @@ function handlePointerUp(e) {
                         const gridCols = gridRows > 0 ? window.currentEventMap[0].length : 0;
 
                         if (gridCols > 0 && gridRows > 0) {
-                            // 表示されている画像サイズをマス目で割って、1マスの大きさを逆算
                             const cellW = rect.w / gridCols;
                             const cellH = rect.h / gridRows;
 
@@ -158,7 +160,7 @@ function handlePointerUp(e) {
                     }
                 }
                 input.isDown = false;
-                return; // ワールドマップ時はこれ以下の戦闘・移動判定を行わない
+                return; 
             }
 
             // ==========================================
@@ -240,7 +242,15 @@ let lastMapId = null; // マップ切り替え検知用
 function update(dt, timestamp) {
     loadAvatarImages(); 
 
-    // ★ マップ切り替え時に、不要なUIを隠す/表示する
+    // ★ マップ読み込み中は、ゲーム内の時間進行・操作・戦闘をすべてストップ
+    if (window.isMapLoading) {
+        if (window.MultiplayerManager) {
+            window.MultiplayerManager.update(dt, timestamp);
+        }
+        return; 
+    }
+
+    // マップ切り替え時に、不要なUIを隠す/表示する
     const currentMapId = window.MapManager ? window.MapManager.currentMapId : null;
     const isWorldMap = currentMapId === 'worldMap';
     
@@ -480,6 +490,26 @@ window.gameLoop = function(timestamp) {
     // 切り出した描画モジュールを呼び出し
     if (window.GameRenderer) {
         window.GameRenderer.draw();
+    }
+
+    // ★追加: マップ読み込み中のオーバーレイ描画
+    if (window.isMapLoading && window.ctx && window.canvas) {
+        const ctx = window.ctx;
+        ctx.save();
+        // 変換マトリクスをリセットして画面全体を覆う
+        ctx.setTransform(1, 0, 0, 1, 0, 0); 
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+        ctx.fillRect(0, 0, window.canvas.width, window.canvas.height);
+        
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 24px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        
+        // フワフワさせるアニメーション
+        const bounce = Math.sin(timestamp / 150) * 5;
+        ctx.fillText('マップ読み込み中...', window.canvas.width / 2, window.canvas.height / 2 + bounce);
+        ctx.restore();
     }
     
     requestAnimationFrame(window.gameLoop);

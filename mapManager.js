@@ -22,7 +22,6 @@ window.MapManager = {
         'worldMap': {
             name: 'ワールドマップ',
             scriptUrl: 'maps/world/data.js'
-            // ★後日ワールドマップ用のBGM等もここに追加します
         },
         'forest': {
             name: '迷いの森',
@@ -42,15 +41,18 @@ window.MapManager = {
             return;
         }
 
+        // ★追加: マップ移動開始時にローディングフラグを立てる
+        window.isMapLoading = true;
+
         if (typeof window.addLog === 'function') window.addLog(`<span class='color-sys'>${this.mapList[mapId].name} へ移動中...</span>`, 'sys');
 
         // 既にデータが読み込み済みかチェック
         if (this.mapDataStore[mapId]) {
-            this.setupMap(mapId, targetEventId);
+            this.preloadImageAndSetup(mapId, targetEventId);
         } else {
             // 未読み込みの場合はJSファイルを動的にロード
             this.loadScript(this.mapList[mapId].scriptUrl, () => {
-                this.setupMap(mapId, targetEventId);
+                this.preloadImageAndSetup(mapId, targetEventId);
             });
         }
     },
@@ -70,24 +72,57 @@ window.MapManager = {
         script.onerror = () => {
             console.error('Failed to load script: ' + absoluteUrl);
             if (typeof window.addLog === 'function') window.addLog("<span class='color-sys'>マップデータの読み込みに失敗しました。</span>", 'sys');
+            window.isMapLoading = false; // エラー時もフラグを解除
         };
         
         document.body.appendChild(script);
     },
 
     // =====================================================
+    // ★追加: 背景画像を裏で読み込み、完全に準備できてから切り替えを行う
+    // =====================================================
+    preloadImageAndSetup: function(mapId, targetEventId) {
+        const data = this.mapDataStore[mapId];
+        if (!data) {
+            window.isMapLoading = false;
+            return;
+        }
+
+        if (data.bgImage) {
+            const img = new Image();
+            img.onload = () => {
+                // 画像の読み込みが完了したら、パラメーターを一気に切り替える
+                this.setupMap(mapId, targetEventId, img);
+            };
+            img.onerror = () => {
+                console.error("背景画像の読み込みに失敗しました:", data.bgImage);
+                this.setupMap(mapId, targetEventId, null);
+            };
+            img.src = data.bgImage;
+        } else {
+            this.setupMap(mapId, targetEventId, null);
+        }
+    },
+
+    // =====================================================
     // 4. 読み込んだデータを使ってゲーム内の環境を再構築する
     // =====================================================
-    setupMap: function(mapId, targetEventId) {
+    setupMap: function(mapId, targetEventId, loadedImg) {
         const data = this.mapDataStore[mapId];
-        if (!data) return;
+        if (!data) {
+            window.isMapLoading = false;
+            return;
+        }
 
         this.currentMapId = mapId;
         
-        // ★追加: 2層目のイベントマップと定義リストをグローバルに保持（後で main.js の移動判定で使います）
+        // 2層目のイベントマップと定義リストを更新
         window.currentEventMap = data.eventMap || [];
         window.currentEvents = data.events || {};
         
+        // ★修正: プリロード完了済みの画像をセット
+        window.currentBackgroundImage = loadedImg;
+
         const GRID_SIZE = 32; 
 
         // [A] ワールドサイズの設定
@@ -101,7 +136,6 @@ window.MapManager = {
             window.obstacles = [];
             for (let y = 0; y < gridRows; y++) {
                 for (let x = 0; x < gridCols; x++) {
-                    // 1層目は純粋に「1(壁)」かどうかだけを見る
                     if (data.collisionMap[y][x] === 1) { 
                         window.obstacles.push({
                             x: x * GRID_SIZE,
@@ -115,20 +149,6 @@ window.MapManager = {
             }
         }
 
-        // [C] 背景画像の設定
-        if (data.bgImage) {
-            const img = new Image();
-            img.src = data.bgImage;
-            img.onload = () => {
-                window.currentBackgroundImage = img;
-            };
-            img.onerror = () => {
-                console.error("背景画像の読み込みに失敗しました:", data.bgImage);
-            };
-        } else {
-            window.currentBackgroundImage = null;
-        }
-
         // [D] A*経路探索用グリッドの再構築
         if (typeof window.initPathGrid === 'function' && window.player) {
             window.pathGridSize = GRID_SIZE; 
@@ -140,7 +160,6 @@ window.MapManager = {
         // [E] プレイヤーの座標セット（イベントIDベースでの着地）
         let spawnId = targetEventId;
         
-        // 引数でIDが指定されていなければ、events リストから isDefaultSpawn: true なものを探す
         if (spawnId === undefined || spawnId === null) {
             for (const key in window.currentEvents) {
                 if (window.currentEvents[key].isDefaultSpawn) {
@@ -153,7 +172,6 @@ window.MapManager = {
         let finalSpawnX = null;
         let finalSpawnY = null;
 
-        // 2層目の eventMap から、着地すべき spawnId のマスを探し出す
         if (spawnId !== null && window.currentEventMap.length > 0) {
             for (let y = 0; y < window.currentEventMap.length; y++) {
                 for (let x = 0; x < window.currentEventMap[y].length; x++) {
@@ -167,7 +185,6 @@ window.MapManager = {
             }
         }
 
-        // 見つかった座標へプレイヤーをワープさせる
         if (window.player && finalSpawnX !== null && finalSpawnY !== null) {
             window.player.x = finalSpawnX;
             window.player.y = finalSpawnY;
@@ -207,5 +224,8 @@ window.MapManager = {
                 window.AudioManager.stopBGM();
             }
         }
+
+        // ★追加: 構築完了後にローディングフラグを下ろす
+        window.isMapLoading = false;
     }
 };
