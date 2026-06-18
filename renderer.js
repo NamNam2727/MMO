@@ -137,6 +137,75 @@ window.GameRenderer = (function() {
         ctx.restore();
     }
 
+    // ★追加: イベントアイコン（ワープや街の目印）を描画する処理
+    function drawEventIcons(ctx, isWorldMap) {
+        if (!window.currentEventMap || !window.currentEvents) return;
+        
+        ctx.save();
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        
+        // アイコンをフワフワ上下に動かすアニメーション
+        const bounce = Math.sin(performance.now() / 200) * 5;
+
+        const gridRows = window.currentEventMap.length;
+        const gridCols = gridRows > 0 ? window.currentEventMap[0].length : 0;
+        if (gridCols === 0 || gridRows === 0) {
+            ctx.restore();
+            return;
+        }
+
+        let startX = 0;
+        let startY = 0;
+        let cellW = 32;
+        let cellH = 32;
+
+        // ワールドマップの場合は、計算された実際の画像領域にグリッドを合わせる
+        if (isWorldMap && window.worldMapRect) {
+            startX = window.worldMapRect.x;
+            startY = window.worldMapRect.y;
+            cellW = window.worldMapRect.w / gridCols;
+            cellH = window.worldMapRect.h / gridRows;
+        }
+
+        // フォントサイズの自動調整
+        const fontSize = isWorldMap ? Math.min(cellW, cellH) * 0.7 : 24;
+        ctx.font = `${fontSize}px sans-serif`;
+
+        for (let y = 0; y < gridRows; y++) {
+            for (let x = 0; x < gridCols; x++) {
+                const eventId = window.currentEventMap[y][x];
+                
+                if (eventId > 0 && window.currentEvents[eventId]) {
+                    const eventDef = window.currentEvents[eventId];
+                    let icon = eventDef.icon;
+
+                    // 指定がない場合のデフォルトの目印
+                    if (!icon) {
+                        if (isWorldMap && eventDef.type === 'area_select') icon = '📍';
+                        else if (!isWorldMap && eventDef.type === 'warp') icon = '✨';
+                    }
+
+                    // 目印を描画
+                    if (icon) {
+                        const drawX = startX + x * cellW + cellW / 2;
+                        let drawY = startY + y * cellH + cellH / 2;
+                        drawY += bounce;
+                        
+                        // 視認性を上げるために薄い黒い影（座布団）を敷く
+                        ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+                        ctx.beginPath();
+                        ctx.arc(drawX, drawY + (fontSize * 0.1), fontSize * 0.6, 0, Math.PI * 2);
+                        ctx.fill();
+                        
+                        ctx.fillText(icon, drawX, drawY);
+                    }
+                }
+            }
+        }
+        ctx.restore();
+    }
+
     // --- 公開する描画メイン処理 ---
     return {
         draw: function() {
@@ -147,43 +216,65 @@ window.GameRenderer = (function() {
             ctx.clearRect(0, 0, window.canvas.width, window.canvas.height);
             ctx.save(); 
             
-            // ★ ワールドマップをスマホ画面の「中央」に配置するためのオフセット計算
-            let offsetX = 0;
-            let offsetY = 0;
-
+            // ====================================================
+            // ★ ワールドマップモードの描画 (全画面アスペクト比維持)
+            // ====================================================
             if (isWorldMap) {
-                offsetX = Math.max(0, (window.camera.width - window.world.width) / 2);
-                offsetY = Math.max(0, (window.camera.height - window.world.height) / 2);
-                ctx.translate(offsetX, offsetY);
-            } else {
-                ctx.translate(-window.camera.x, -window.camera.y);
+                let drawX = 0, drawY = 0, drawW = window.camera.width, drawH = window.camera.height;
+
+                if (window.currentBackgroundImage && window.currentBackgroundImage.complete && window.currentBackgroundImage.naturalWidth > 0) {
+                    const img = window.currentBackgroundImage;
+                    const canvasW = window.camera.width;
+                    const canvasH = window.camera.height;
+                    const imgW = img.naturalWidth;
+                    const imgH = img.naturalHeight;
+                    
+                    // 画面に収まる最大サイズ（contain: アスペクト比を維持）
+                    const scale = Math.min(canvasW / imgW, canvasH / imgH);
+                    drawW = imgW * scale;
+                    drawH = imgH * scale;
+                    drawX = (canvasW - drawW) / 2;
+                    drawY = (canvasH - drawH) / 2;
+                    
+                    ctx.drawImage(img, drawX, drawY, drawW, drawH);
+                } else {
+                    ctx.fillStyle = '#112233';
+                    ctx.fillRect(0, 0, window.camera.width, window.camera.height);
+                }
+
+                // グリッド計算やタップ判定のために描画した矩形領域を保存しておく
+                window.worldMapRect = { x: drawX, y: drawY, w: drawW, h: drawH };
+
+                // アイコンを描画
+                drawEventIcons(ctx, true);
+                ctx.restore();
+                return; 
             }
+
+            // ====================================================
+            // 以下、通常マップ（街や森）の描画処理
+            // ====================================================
+            ctx.translate(-window.camera.x, -window.camera.y);
 
             // 1. 背景の描画
             if (window.currentBackgroundImage && window.currentBackgroundImage.complete) {
                 ctx.drawImage(window.currentBackgroundImage, 0, 0, window.world.width, window.world.height);
             } else {
                 ctx.strokeStyle = '#333'; ctx.lineWidth = 1; const gridSize = 32;
-                const startX = isWorldMap ? 0 : Math.max(0, Math.floor(window.camera.x / gridSize) * gridSize); 
-                const startY = isWorldMap ? 0 : Math.max(0, Math.floor(window.camera.y / gridSize) * gridSize);
-                const endX = isWorldMap ? window.world.width : Math.min(window.world.width, startX + window.camera.width + gridSize); 
-                const endY = isWorldMap ? window.world.height : Math.min(window.world.height, startY + window.camera.height + gridSize);
+                const startX = Math.max(0, Math.floor(window.camera.x / gridSize) * gridSize); 
+                const startY = Math.max(0, Math.floor(window.camera.y / gridSize) * gridSize);
+                const endX = Math.min(window.world.width, startX + window.camera.width + gridSize); 
+                const endY = Math.min(window.world.height, startY + window.camera.height + gridSize);
                 ctx.beginPath();
                 for(let x = startX; x <= endX; x += gridSize) { ctx.moveTo(x, startY); ctx.lineTo(x, endY); }
                 for(let y = startY; y <= endY; y += gridSize) { ctx.moveTo(startX, y); ctx.lineTo(endX, y); }
                 ctx.stroke();
             }
 
-            // ★ ワールドマップモードの場合、背景（マップ画像）を描画したらすぐに終了する
-            if (isWorldMap) {
-                ctx.restore();
-                return; 
-            }
-
-            // ----------------------------------------------------
-            // 以下、通常マップ（街や森）の描画処理
-            // ----------------------------------------------------
             ctx.strokeStyle = '#ff0000'; ctx.lineWidth = 4; ctx.strokeRect(0, 0, window.world.width, window.world.height);
+
+            // ★追加: 通常マップのイベントアイコン（ワープ等）を描画
+            drawEventIcons(ctx, false);
 
             for (const item of window.droppedItems) {
                 ctx.globalAlpha = (item.ownerId !== null && item.ownerId !== window.player.id) ? 0.3 : 1.0;

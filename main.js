@@ -122,23 +122,37 @@ function handlePointerUp(e) {
             const isWorldMap = window.MapManager && window.MapManager.currentMapId === 'worldMap';
             
             if (isWorldMap) {
-                // センタリングされている分のズレを引いて、マップ画像上の純粋な座標を求める
-                const offsetX = Math.max(0, (window.camera.width - window.world.width) / 2);
-                const offsetY = Math.max(0, (window.camera.height - window.world.height) / 2);
-                const mapX = input.screenX - offsetX;
-                const mapY = input.screenY - offsetY;
-                
-                // マップの枠内をタップしたか判定
-                if (mapX >= 0 && mapX <= window.world.width && mapY >= 0 && mapY <= window.world.height) {
-                    const gridX = Math.floor(mapX / 32);
-                    const gridY = Math.floor(mapY / 32);
+                // 描画エンジンで計算された「実際の画像の表示領域」を使用する
+                if (window.worldMapRect && window.currentEventMap) {
+                    const rect = window.worldMapRect;
                     
-                    if (window.currentEventMap && window.currentEventMap[gridY] && window.currentEventMap[gridY][gridX]) {
-                        const eventId = window.currentEventMap[gridY][gridX];
-                        if (eventId > 0 && window.currentEvents && window.currentEvents[eventId]) {
-                            const eventDef = window.currentEvents[eventId];
-                            if (eventDef.type === 'area_select') {
-                                window.showAreaSelectUI(eventDef);
+                    // タップした座標が画像の領域内かどうかチェック
+                    if (input.screenX >= rect.x && input.screenX <= rect.x + rect.w &&
+                        input.screenY >= rect.y && input.screenY <= rect.y + rect.h) {
+                        
+                        // 画像内での相対座標
+                        const relX = input.screenX - rect.x;
+                        const relY = input.screenY - rect.y;
+
+                        const gridRows = window.currentEventMap.length;
+                        const gridCols = gridRows > 0 ? window.currentEventMap[0].length : 0;
+
+                        if (gridCols > 0 && gridRows > 0) {
+                            // 表示されている画像サイズをマス目で割って、1マスの大きさを逆算
+                            const cellW = rect.w / gridCols;
+                            const cellH = rect.h / gridRows;
+
+                            const gridX = Math.floor(relX / cellW);
+                            const gridY = Math.floor(relY / cellH);
+
+                            if (window.currentEventMap[gridY] && window.currentEventMap[gridY][gridX]) {
+                                const eventId = window.currentEventMap[gridY][gridX];
+                                if (eventId > 0 && window.currentEvents && window.currentEvents[eventId]) {
+                                    const eventDef = window.currentEvents[eventId];
+                                    if (eventDef.type === 'area_select') {
+                                        window.showAreaSelectUI(eventDef);
+                                    }
+                                }
                             }
                         }
                     }
