@@ -9,7 +9,7 @@
     // 依存関係を考慮したファイルの読み込み順序
     const scriptsToLoad = [
         'config.js',
-        'audio.js',        // 音楽の基盤システム
+        'audio.js',        
         'skill_db.js',     
         'itemDB.js',
         'utils.js',
@@ -17,12 +17,13 @@
         'entities.js',
         'inventory.js',    
         'shortcut.js',     
-        'status_ui.js',    // ステータス画面制御
-        'chat_system.js',  // チャット・ログ制御
-        'ui.js',           // ベースとなるUI制御（これらを呼び出す）
+        'status_ui.js',    
+        'chat_system.js',  
+        'ui.js',           
         'skill_create.js', 
         'skill.js',        
-        'multiplayer.js',  // マルチプレイ・パーティUI
+        'multiplayer.js',  
+        'renderer.js',     // ★追加: 切り出した描画モジュール
         'main.js'          
     ];
 
@@ -72,9 +73,7 @@
         // メインループの開始
         requestAnimationFrame(window.gameLoop);
 
-        // ★初期マップの読み込み 
-        // 引数に特定のIDを指定しないことで、mapManagerが自動的に
-        // data.js の events に定義された `isDefaultSpawn: true` の場所 (ID: 9) を探して配置します。
+        // 初期マップの読み込み 
         if (window.MapManager) {
             window.MapManager.changeMap('town');
         }
