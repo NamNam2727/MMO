@@ -304,7 +304,7 @@ window.GameRenderer = (function() {
                     if (window.player.isAutoAttacking && !eIsFrozen) { ctx.fillStyle = 'rgba(255, 0, 0, 0.2)'; ctx.fill(); }
                 }
 
-                // ★追加: 敵の画像が設定されていれば描画、なければデフォルトの丸を描画
+                // 敵の画像が設定されていれば描画、なければデフォルトの丸を描画
                 if (enemy.image && enemy.image.complete && enemy.image.naturalWidth > 0) {
                     ctx.save();
                     ctx.imageSmoothingEnabled = true;
@@ -323,9 +323,40 @@ window.GameRenderer = (function() {
                     ctx.fillStyle = 'red'; ctx.font = 'bold 16px sans-serif'; ctx.fillText('!', enemy.x - 5, enemy.y - enemy.radius - 20);
                 }
 
-                const hpWidth = 40; const hpHeight = 5; const hpRatio = enemy.hp / enemy.maxHp;
-                ctx.fillStyle = 'black'; ctx.fillRect(enemy.x - hpWidth / 2, enemy.y - enemy.radius - 15, hpWidth, hpHeight);
-                ctx.fillStyle = 'red'; ctx.fillRect(enemy.x - hpWidth / 2, enemy.y - enemy.radius - 15, hpWidth * hpRatio, hpHeight);
+                // ==========================================
+                // ★追加: 敵の名前表示とレベル差による色変更
+                // ==========================================
+                const diff = enemy.level - window.player.level;
+                let nameColor = '#ffffff'; // 白 (±1)
+                
+                if (diff <= -11) nameColor = '#4444ff';        // 青 (-11以下)
+                else if (diff <= -6) nameColor = '#00ffff';    // 水色 (-6 〜 -10)
+                else if (diff <= -2) nameColor = '#00ff00';    // 緑 (-2 〜 -5)
+                else if (diff <= 1) nameColor = '#ffffff';     // 白 (-1, 0, +1)
+                else if (diff <= 5) nameColor = '#ffa500';     // 橙色 (+2 〜 +5)
+                else if (diff <= 10) nameColor = '#ff4444';    // 赤 (+6 〜 +10)
+                else nameColor = '#ff00ff';                    // 赤紫色 (+11以上)
+
+                ctx.font = 'bold 11px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'top';
+                ctx.lineWidth = 2;
+                ctx.strokeStyle = '#000'; // 黒いフチドリで読みやすくする
+                const nameText = `Lv${enemy.level} ${enemy.name}`;
+                
+                // 画像の下（半径の少し下）に表示
+                ctx.strokeText(nameText, enemy.x, enemy.y + enemy.radius + 4);
+                ctx.fillStyle = nameColor;
+                ctx.fillText(nameText, enemy.x, enemy.y + enemy.radius + 4);
+
+                // ==========================================
+                // ★変更: HPがMAXの時はHPバーを非表示にする
+                // ==========================================
+                if (enemy.hp < enemy.maxHp) {
+                    const hpWidth = 40; const hpHeight = 5; const hpRatio = enemy.hp / enemy.maxHp;
+                    ctx.fillStyle = 'black'; ctx.fillRect(enemy.x - hpWidth / 2, enemy.y - enemy.radius - 15, hpWidth, hpHeight);
+                    ctx.fillStyle = 'red'; ctx.fillRect(enemy.x - hpWidth / 2, enemy.y - enemy.radius - 15, hpWidth * hpRatio, hpHeight);
+                }
             }
 
             let pIsFrozen = window.player.effects && window.player.effects.some(e => e.type === 'ice' && e.duration > 0);
