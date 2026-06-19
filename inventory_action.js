@@ -10,41 +10,331 @@ window.initInventoryUI = function() {
     const invContent = document.getElementById('invContent');
     const itemDetail = document.getElementById('itemDetail');
 
+    // =========================================================
+    // ★変更: プレイヤーの有無に関わらず、DOMへのイベント登録は最初に行う
+    // (二重登録を防ぐためフラグで管理)
+    // =========================================================
+    if (!window.__invDOMEventsRegistered) {
+        window.__invDOMEventsRegistered = true;
+
+        // --- バッグ開閉ボタン ---
+        document.getElementById('bagBtn').addEventListener('pointerdown', (e) => { 
+            e.stopPropagation(); 
+            if(typeof window.toggleInventory === 'function') window.toggleInventory(); 
+        });
+        
+        document.getElementById('invCloseBtn').addEventListener('pointerdown', (e) => { 
+            e.stopPropagation(); 
+            if(typeof window.toggleInventory === 'function') window.toggleInventory(); 
+        });
+
+        // --- ウィンドウのドラッグ移動 ---
+        let isDraggingInv = false; 
+        let dragOffsetX = 0; 
+        let dragOffsetY = 0;
+        
+        invTitleBar.addEventListener('pointerdown', (e) => {
+            if(e.target.id === 'invCloseBtn') return;
+            isDraggingInv = true; 
+            const rect = window.invWindow.getBoundingClientRect();
+            dragOffsetX = e.clientX - rect.left; 
+            dragOffsetY = e.clientY - rect.top; 
+            e.stopPropagation();
+        });
+        
+        window.addEventListener('pointermove', (e) => {
+            if (isDraggingInv) { 
+                window.invWindow.style.left = `${e.clientX - dragOffsetX}px`; 
+                window.invWindow.style.top = `${e.clientY - dragOffsetY}px`; 
+            }
+        });
+        
+        window.addEventListener('pointerup', () => { isDraggingInv = false; });
+
+        // --- タブ切り替え（タップ＆ドラッグ対応） ---
+        let isDraggingTab = false;
+        invTabs.addEventListener('pointerdown', (e) => { 
+            isDraggingTab = true; 
+            handleTabDrag(e); 
+            e.stopPropagation(); 
+        });
+        window.addEventListener('pointermove', (e) => { 
+            if (isDraggingTab) handleTabDrag(e); 
+        });
+        window.addEventListener('pointerup', () => { isDraggingTab = false; });
+        window.addEventListener('pointercancel', () => { isDraggingTab = false; });
+
+        function handleTabDrag(e) {
+            const elem = document.elementFromPoint(e.clientX, e.clientY);
+            if (elem && elem.classList.contains('inv-tab')) {
+                const tabName = elem.getAttribute('data-tab');
+                const idx = window.tabsList.indexOf(tabName);
+                if (idx !== -1 && typeof window.switchTab === 'function') window.switchTab(idx);
+            }
+        }
+
+        // --- 画面スワイプによるタブ切り替え ---
+        let contentStartX = 0; 
+        let contentStartY = 0; 
+        let isContentSwiping = false;
+        
+        invContent.addEventListener('pointerdown', (e) => { 
+            contentStartX = e.clientX; 
+            contentStartY = e.clientY; 
+            isContentSwiping = true; 
+        });
+        
+        invContent.addEventListener('pointerup', (e) => {
+            if (!isContentSwiping) return;
+            isContentSwiping = false;
+            let dx = e.clientX - contentStartX; 
+            let dy = e.clientY - contentStartY;
+            if (Math.abs(dx) > 30 && Math.abs(dx) > Math.abs(dy)) {
+                if (dx < 0 && typeof window.switchTab === 'function') window.switchTab(window.currentTabIndex + 1); 
+                else if(typeof window.switchTab === 'function') window.switchTab(window.currentTabIndex - 1);        
+            }
+        });
+        
+        invContent.addEventListener('pointercancel', () => { isContentSwiping = false; });
+
+        // --- 詳細ウィンドウの操作 ---
+        document.getElementById('btnDetailClose').addEventListener('pointerdown', (e) => {
+            e.stopPropagation(); 
+            itemDetail.style.display = 'none';
+        });
+
+        document.getElementById('btnUseEquip').addEventListener('pointerdown', (e) => {
+            const btnUseEquip = document.getElementById('btnUseEquip');
+            
+            if (btnUseEquip.dataset.isChip === "true") {
+                e.stopPropagation();
+                e.stopImmediatePropagation();
+                e.preventDefault();
+                
+                document.getElementById('itemDetail').style.display = 'none';
+                if (!window.player) return;
+                const tabData = window.player.inventory[window.tabsList[window.currentTabIndex]];
+                if (!tabData) return;
+                const item = tabData.items[window.selectedItemIndex];
+                if (item && typeof window.openSkillCreateWindow === 'function') {
+                    window.openSkillCreateWindow(item);
+                }
+                return;
+            }
+
+            if (btnUseEquip.dataset.isSkill === "true") {
+                e.stopPropagation();
+                e.stopImmediatePropagation();
+                e.preventDefault();
+                
+                document.getElementById('itemDetail').style.display = 'none';
+                if (!window.player) return;
+                const tabData = window.player.inventory[window.tabsList[window.currentTabIndex]];
+                if (!tabData) return;
+                const item = tabData.items[window.selectedItemIndex];
+                if (item && typeof window.prepareSkill === 'function') {
+                    window.prepareSkill(item);
+                }
+                return;
+            }
+
+            e.stopPropagation();
+            if (!window.player) return;
+            const currentTabName = window.tabsList[window.currentTabIndex];
+            const tabData = window.player.inventory[currentTabName];
+            if (!tabData) return;
+            const item = tabData.items[window.selectedItemIndex];
+            if (!item) return;
+
+            if (item.type === 'consume') {
+                if (window.itemCooldowns && window.itemCooldowns[item.id] > 0) {
+                    if (typeof window.addLog === 'function') window.addLog(`<span class='color-sys'>まだ使用できません。</span>`, 'sys');
+                    return;
+                }
+                if (item.restore) {
+                    window.player.hp = Math.min(window.player.maxHp, window.player.hp + item.restore);
+                }
+                if (typeof window.updateWidgetUI === 'function') window.updateWidgetUI();
+                
+                window.itemCooldowns[item.id] = 3.0;
+
+                item.count--;
+                if (item.count <= 0) { 
+                    tabData.items.splice(window.selectedItemIndex, 1); 
+                    window.selectedItemIndex = -1; 
+                }
+            } else if (item.type === 'equip') {
+                if (item.isEquipped) {
+                    item.isEquipped = false; 
+                    window.player.equipped[item.equipSlot] = null;
+                } else {
+                    tabData.items.forEach(i => { if (i.equipSlot === item.equipSlot) i.isEquipped = false; });
+                    item.isEquipped = true; 
+                    window.player.equipped[item.equipSlot] = item;
+                }
+                if (typeof window.updatePlayerStats === 'function') window.updatePlayerStats(); 
+            }
+            itemDetail.style.display = 'none'; 
+            if(typeof window.renderInventory === 'function') window.renderInventory();
+        });
+
+        document.getElementById('btnDrop').addEventListener('pointerdown', (e) => {
+            e.stopPropagation();
+            if(itemDetail) itemDetail.style.display = 'none';
+            if (!window.player) return;
+
+            const currentTabName = window.tabsList[window.currentTabIndex];
+            const tabData = window.player.inventory[currentTabName];
+            if (!tabData) return;
+            const item = tabData.items[window.selectedItemIndex];
+            if (!item) return;
+
+            if (item.count > 1) {
+                window.showDropDialog(item, tabData, window.selectedItemIndex);
+            } else {
+                window.showConfirmDropDialog(item, tabData, window.selectedItemIndex);
+            }
+        });
+
+        // --- インベントリ用 グローバル D&Dイベント ---
+        if (!window.__invDndEventsRegistered) {
+            window.__invDndEventsRegistered = true;
+            
+            const updateInvGhostPos = (x, y) => {
+                window.lastDragX = x; 
+                window.lastDragY = y;
+                const gh = document.getElementById('invDragGhost');
+                if(gh) { 
+                    gh.style.left = x + 'px'; 
+                    gh.style.top = y + 'px'; 
+                }
+                window.checkAutoScroll(y);
+            };
+
+            window.addEventListener('pointermove', (e) => {
+                if (window.isDraggingItem) { 
+                    e.preventDefault(); 
+                    updateInvGhostPos(e.clientX, e.clientY); 
+                }
+            }, { passive: false });
+
+            window.addEventListener('touchmove', (e) => {
+                if (e.touches && e.touches.length > 0) {
+                    if (window.isDraggingItem) { 
+                        e.preventDefault(); 
+                        updateInvGhostPos(e.touches[0].clientX, e.touches[0].clientY); 
+                    }
+                }
+            }, { passive: false });
+
+            const handleInvDropEnd = (e) => {
+                if (window.lpTimer) { 
+                    clearTimeout(window.lpTimer); 
+                    window.lpTimer = null; 
+                }
+                if (!window.isDraggingItem) return;
+                
+                window.isDraggingItem = false;
+                window.justDropped = true; 
+                const gh = document.getElementById('invDragGhost');
+                if (gh) gh.style.display = 'none';
+                window.stopAutoScroll();
+                document.body.style.touchAction = '';
+
+                setTimeout(() => {
+                    const targetElem = document.elementFromPoint(window.lastDragX, window.lastDragY);
+                    if (targetElem) {
+                        const dropSlot = targetElem.closest('.inv-slot');
+                        const scSlot = targetElem.closest('.shortcut-slot');
+                        const invWindowObj = targetElem.closest('#invWindow');
+                        if (!window.player) return;
+                        const tabData = window.player.inventory[window.dragState.sourceTab];
+                        
+                        if (dropSlot && dropSlot.dataset.idx !== undefined) {
+                            const targetIdx = parseInt(dropSlot.dataset.idx);
+                            const sourceIdx = window.dragState.sourceIdx;
+                            if (targetIdx !== sourceIdx) {
+                                if (targetIdx < tabData.items.length) {
+                                    let temp = tabData.items[sourceIdx];
+                                    tabData.items[sourceIdx] = tabData.items[targetIdx];
+                                    tabData.items[targetIdx] = temp;
+                                } else {
+                                    let temp = tabData.items[sourceIdx];
+                                    tabData.items.splice(sourceIdx, 1);
+                                    tabData.items.push(temp);
+                                }
+                                if(typeof window.renderInventory === 'function') window.renderInventory();
+                            }
+                        } else if (scSlot && scSlot.dataset.scIdx !== undefined) {
+                            // ショートカットへの登録処理
+                            const scIdx = parseInt(scSlot.dataset.scIdx);
+                            const item = window.dragState.item;
+                            if(typeof window.ensureUIDs === 'function') window.ensureUIDs();
+                            if (!item.uid) item.uid = 'uid_' + Date.now() + '_' + Math.floor(Math.random() * 1000000);
+                            if (typeof window.registerShortcut === 'function') {
+                                window.registerShortcut(scIdx, item);
+                            }
+                        } else if (!invWindowObj && !targetElem.closest('#bottomUIContainer') && !targetElem.closest('#skillCreateWindow')) {
+                            const item = window.dragState.item;
+                            const sIdx = window.dragState.sourceIdx;
+                            if (item.count > 1) {
+                                if (typeof window.showDropDialog === 'function') window.showDropDialog(item, tabData, sIdx);
+                            } else {
+                                window.showConfirmDropDialog(item, tabData, sIdx);
+                            }
+                        }
+                    }
+                    setTimeout(() => { window.justDropped = false; }, 200);
+                }, 10);
+            };
+
+            window.addEventListener('pointerup', handleInvDropEnd);
+            window.addEventListener('pointercancel', handleInvDropEnd);
+            window.addEventListener('touchend', handleInvDropEnd);
+        }
+    } // -- DOMイベント登録ブロックの終了 --
+
+    // =========================================================
+    // ★ここから下は、プレイヤーが存在する場合のみ実行される処理
+    // =========================================================
     if (!window.player) return; 
 
     if(typeof window.ensureUIDs === 'function') window.ensureUIDs();
 
-    // --- CT減算とDOM更新ループ ---
-    let lastTimeCT = performance.now();
-    function updateCT() {
-        let now = performance.now();
-        let dt = (now - lastTimeCT) / 1000;
-        lastTimeCT = now;
-        
-        for (let id in window.itemCooldowns) {
-            if (window.itemCooldowns[id] > 0) {
-                window.itemCooldowns[id] -= dt;
-                if (window.itemCooldowns[id] <= 0) {
-                    delete window.itemCooldowns[id];
+    // --- CT減算とDOM更新ループ (二重起動防止) ---
+    if (!window.__invCTLoopStarted) {
+        window.__invCTLoopStarted = true;
+        let lastTimeCT = performance.now();
+        function updateCT() {
+            let now = performance.now();
+            let dt = (now - lastTimeCT) / 1000;
+            lastTimeCT = now;
+            
+            for (let id in window.itemCooldowns) {
+                if (window.itemCooldowns[id] > 0) {
+                    window.itemCooldowns[id] -= dt;
+                    if (window.itemCooldowns[id] <= 0) {
+                        delete window.itemCooldowns[id];
+                    }
                 }
             }
-        }
-        
-        const allOverlays = document.querySelectorAll('.ct-overlay, .ct-overlay-sc');
-        allOverlays.forEach(overlay => {
-            const id = overlay.getAttribute('data-ct-id');
-            if (window.itemCooldowns && window.itemCooldowns[id] > 0) {
-                const maxCt = (window.itemMaxCooldowns && window.itemMaxCooldowns[id]) ? window.itemMaxCooldowns[id] : 3.0;
-                const ratio = window.itemCooldowns[id] / maxCt; 
-                overlay.style.height = `${ratio * 100}%`; 
-            } else {
-                overlay.style.height = `0%`;
-            }
-        });
+            
+            const allOverlays = document.querySelectorAll('.ct-overlay, .ct-overlay-sc');
+            allOverlays.forEach(overlay => {
+                const id = overlay.getAttribute('data-ct-id');
+                if (window.itemCooldowns && window.itemCooldowns[id] > 0) {
+                    const maxCt = (window.itemMaxCooldowns && window.itemMaxCooldowns[id]) ? window.itemMaxCooldowns[id] : 3.0;
+                    const ratio = window.itemCooldowns[id] / maxCt; 
+                    overlay.style.height = `${ratio * 100}%`; 
+                } else {
+                    overlay.style.height = `0%`;
+                }
+            });
 
+            requestAnimationFrame(updateCT);
+        }
         requestAnimationFrame(updateCT);
     }
-    requestAnimationFrame(updateCT);
 
     // インベントリ用ゴーストアイコンの生成
     let ghost = document.getElementById('invDragGhost');
@@ -53,273 +343,6 @@ window.initInventoryUI = function() {
         ghost.id = 'invDragGhost';
         ghost.style.cssText = 'position: fixed; pointer-events: none; display: none; z-index: 1000; width: 44px; height: 44px; justify-content: center; align-items: center; opacity: 0.8; transform: translate(-50%, -50%);';
         document.body.appendChild(ghost);
-    }
-
-    // --- インベントリイベントリスナー ---
-    document.getElementById('bagBtn').addEventListener('pointerdown', (e) => { 
-        e.stopPropagation(); 
-        if(typeof window.toggleInventory === 'function') window.toggleInventory(); 
-    });
-    
-    document.getElementById('invCloseBtn').addEventListener('pointerdown', (e) => { 
-        e.stopPropagation(); 
-        if(typeof window.toggleInventory === 'function') window.toggleInventory(); 
-    });
-
-    let isDraggingInv = false; 
-    let dragOffsetX = 0; 
-    let dragOffsetY = 0;
-    
-    invTitleBar.addEventListener('pointerdown', (e) => {
-        if(e.target.id === 'invCloseBtn') return;
-        isDraggingInv = true; 
-        const rect = window.invWindow.getBoundingClientRect();
-        dragOffsetX = e.clientX - rect.left; 
-        dragOffsetY = e.clientY - rect.top; 
-        e.stopPropagation();
-    });
-    
-    window.addEventListener('pointermove', (e) => {
-        if (isDraggingInv) { 
-            window.invWindow.style.left = `${e.clientX - dragOffsetX}px`; 
-            window.invWindow.style.top = `${e.clientY - dragOffsetY}px`; 
-        }
-    });
-    
-    window.addEventListener('pointerup', () => { isDraggingInv = false; });
-
-    let isDraggingTab = false;
-    invTabs.addEventListener('pointerdown', (e) => { 
-        isDraggingTab = true; 
-        handleTabDrag(e); 
-        e.stopPropagation(); 
-    });
-    window.addEventListener('pointermove', (e) => { 
-        if (isDraggingTab) handleTabDrag(e); 
-    });
-    window.addEventListener('pointerup', () => { isDraggingTab = false; });
-    window.addEventListener('pointercancel', () => { isDraggingTab = false; });
-
-    function handleTabDrag(e) {
-        const elem = document.elementFromPoint(e.clientX, e.clientY);
-        if (elem && elem.classList.contains('inv-tab')) {
-            const tabName = elem.getAttribute('data-tab');
-            const idx = window.tabsList.indexOf(tabName);
-            if (idx !== -1 && typeof window.switchTab === 'function') window.switchTab(idx);
-        }
-    }
-
-    let contentStartX = 0; 
-    let contentStartY = 0; 
-    let isContentSwiping = false;
-    
-    invContent.addEventListener('pointerdown', (e) => { 
-        contentStartX = e.clientX; 
-        contentStartY = e.clientY; 
-        isContentSwiping = true; 
-    });
-    
-    invContent.addEventListener('pointerup', (e) => {
-        if (!isContentSwiping) return;
-        isContentSwiping = false;
-        let dx = e.clientX - contentStartX; 
-        let dy = e.clientY - contentStartY;
-        if (Math.abs(dx) > 30 && Math.abs(dx) > Math.abs(dy)) {
-            if (dx < 0 && typeof window.switchTab === 'function') window.switchTab(window.currentTabIndex + 1); 
-            else if(typeof window.switchTab === 'function') window.switchTab(window.currentTabIndex - 1);        
-        }
-    });
-    
-    invContent.addEventListener('pointercancel', () => { isContentSwiping = false; });
-
-    document.getElementById('btnDetailClose').addEventListener('pointerdown', (e) => {
-        e.stopPropagation(); 
-        itemDetail.style.display = 'none';
-    });
-
-    document.getElementById('btnUseEquip').addEventListener('pointerdown', (e) => {
-        const btnUseEquip = document.getElementById('btnUseEquip');
-        
-        if (btnUseEquip.dataset.isChip === "true") {
-            e.stopPropagation();
-            e.stopImmediatePropagation();
-            e.preventDefault();
-            
-            document.getElementById('itemDetail').style.display = 'none';
-            const tabData = window.player.inventory[window.tabsList[window.currentTabIndex]];
-            if (!tabData) return;
-            const item = tabData.items[window.selectedItemIndex];
-            if (item && typeof window.openSkillCreateWindow === 'function') {
-                window.openSkillCreateWindow(item);
-            }
-            return;
-        }
-
-        if (btnUseEquip.dataset.isSkill === "true") {
-            e.stopPropagation();
-            e.stopImmediatePropagation();
-            e.preventDefault();
-            
-            document.getElementById('itemDetail').style.display = 'none';
-            const tabData = window.player.inventory[window.tabsList[window.currentTabIndex]];
-            if (!tabData) return;
-            const item = tabData.items[window.selectedItemIndex];
-            if (item && typeof window.prepareSkill === 'function') {
-                window.prepareSkill(item);
-            }
-            return;
-        }
-
-        e.stopPropagation();
-        const currentTabName = window.tabsList[window.currentTabIndex];
-        const tabData = window.player.inventory[currentTabName];
-        if (!tabData) return;
-        const item = tabData.items[window.selectedItemIndex];
-        if (!item) return;
-
-        if (item.type === 'consume') {
-            if (window.itemCooldowns && window.itemCooldowns[item.id] > 0) {
-                if (typeof window.addLog === 'function') window.addLog(`<span class='color-sys'>まだ使用できません。</span>`, 'sys');
-                return;
-            }
-            if (item.restore) {
-                window.player.hp = Math.min(window.player.maxHp, window.player.hp + item.restore);
-            }
-            if (typeof window.updateWidgetUI === 'function') window.updateWidgetUI();
-            
-            window.itemCooldowns[item.id] = 3.0;
-
-            item.count--;
-            if (item.count <= 0) { 
-                tabData.items.splice(window.selectedItemIndex, 1); 
-                window.selectedItemIndex = -1; 
-            }
-        } else if (item.type === 'equip') {
-            if (item.isEquipped) {
-                item.isEquipped = false; 
-                window.player.equipped[item.equipSlot] = null;
-            } else {
-                tabData.items.forEach(i => { if (i.equipSlot === item.equipSlot) i.isEquipped = false; });
-                item.isEquipped = true; 
-                window.player.equipped[item.equipSlot] = item;
-            }
-            if (typeof window.updatePlayerStats === 'function') window.updatePlayerStats(); 
-        }
-        itemDetail.style.display = 'none'; 
-        if(typeof window.renderInventory === 'function') window.renderInventory();
-    });
-
-    document.getElementById('btnDrop').addEventListener('pointerdown', (e) => {
-        e.stopPropagation();
-        if(itemDetail) itemDetail.style.display = 'none';
-
-        const currentTabName = window.tabsList[window.currentTabIndex];
-        const tabData = window.player.inventory[currentTabName];
-        if (!tabData) return;
-        const item = tabData.items[window.selectedItemIndex];
-        if (!item) return;
-
-        if (item.count > 1) {
-            window.showDropDialog(item, tabData, window.selectedItemIndex);
-        } else {
-            window.showConfirmDropDialog(item, tabData, window.selectedItemIndex);
-        }
-    });
-
-    // --- インベントリ用 グローバル D&Dイベント ---
-    if (!window.__invDndEventsRegistered) {
-        window.__invDndEventsRegistered = true;
-        
-        const updateInvGhostPos = (x, y) => {
-            window.lastDragX = x; 
-            window.lastDragY = y;
-            const gh = document.getElementById('invDragGhost');
-            if(gh) { 
-                gh.style.left = x + 'px'; 
-                gh.style.top = y + 'px'; 
-            }
-            window.checkAutoScroll(y);
-        };
-
-        window.addEventListener('pointermove', (e) => {
-            if (window.isDraggingItem) { 
-                e.preventDefault(); 
-                updateInvGhostPos(e.clientX, e.clientY); 
-            }
-        }, { passive: false });
-
-        window.addEventListener('touchmove', (e) => {
-            if (e.touches && e.touches.length > 0) {
-                if (window.isDraggingItem) { 
-                    e.preventDefault(); 
-                    updateInvGhostPos(e.touches[0].clientX, e.touches[0].clientY); 
-                }
-            }
-        }, { passive: false });
-
-        const handleInvDropEnd = (e) => {
-            if (window.lpTimer) { 
-                clearTimeout(window.lpTimer); 
-                window.lpTimer = null; 
-            }
-            if (!window.isDraggingItem) return;
-            
-            window.isDraggingItem = false;
-            window.justDropped = true; 
-            const gh = document.getElementById('invDragGhost');
-            if (gh) gh.style.display = 'none';
-            window.stopAutoScroll();
-            document.body.style.touchAction = '';
-
-            setTimeout(() => {
-                const targetElem = document.elementFromPoint(window.lastDragX, window.lastDragY);
-                if (targetElem) {
-                    const dropSlot = targetElem.closest('.inv-slot');
-                    const scSlot = targetElem.closest('.shortcut-slot');
-                    const invWindowObj = targetElem.closest('#invWindow');
-                    const tabData = window.player.inventory[window.dragState.sourceTab];
-                    
-                    if (dropSlot && dropSlot.dataset.idx !== undefined) {
-                        const targetIdx = parseInt(dropSlot.dataset.idx);
-                        const sourceIdx = window.dragState.sourceIdx;
-                        if (targetIdx !== sourceIdx) {
-                            if (targetIdx < tabData.items.length) {
-                                let temp = tabData.items[sourceIdx];
-                                tabData.items[sourceIdx] = tabData.items[targetIdx];
-                                tabData.items[targetIdx] = temp;
-                            } else {
-                                let temp = tabData.items[sourceIdx];
-                                tabData.items.splice(sourceIdx, 1);
-                                tabData.items.push(temp);
-                            }
-                            if(typeof window.renderInventory === 'function') window.renderInventory();
-                        }
-                    } else if (scSlot && scSlot.dataset.scIdx !== undefined) {
-                        // ショートカットへの登録処理
-                        const scIdx = parseInt(scSlot.dataset.scIdx);
-                        const item = window.dragState.item;
-                        if(typeof window.ensureUIDs === 'function') window.ensureUIDs();
-                        if (!item.uid) item.uid = 'uid_' + Date.now() + '_' + Math.floor(Math.random() * 1000000);
-                        if (typeof window.registerShortcut === 'function') {
-                            window.registerShortcut(scIdx, item);
-                        }
-                    } else if (!invWindowObj && !targetElem.closest('#bottomUIContainer') && !targetElem.closest('#skillCreateWindow')) {
-                        const item = window.dragState.item;
-                        const sIdx = window.dragState.sourceIdx;
-                        if (item.count > 1) {
-                            if (typeof window.showDropDialog === 'function') window.showDropDialog(item, tabData, sIdx);
-                        } else {
-                            window.showConfirmDropDialog(item, tabData, sIdx);
-                        }
-                    }
-                }
-                setTimeout(() => { window.justDropped = false; }, 200);
-            }, 10);
-        };
-
-        window.addEventListener('pointerup', handleInvDropEnd);
-        window.addEventListener('pointercancel', handleInvDropEnd);
-        window.addEventListener('touchend', handleInvDropEnd);
     }
 
     // ショートカットの初期化関数が読み込まれていれば実行

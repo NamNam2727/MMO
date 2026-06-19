@@ -87,8 +87,10 @@ window.compressStacks = function() {
 };
 
 window.renderInventory = function() {
-    // 【修復機能】敵からドロップしたアイテム等、データが欠損している場合にマスターから補完
-    if (window.player && window.player.inventory && window.ITEM_DB) {
+    // プレイヤーがいない場合は描画しない
+    if (!window.player || !window.player.inventory) return;
+
+    if (window.ITEM_DB) {
         for (const tab in window.player.inventory) {
             window.player.inventory[tab].items.forEach(item => {
                 const dbItem = window.ITEM_DB[item.id];
@@ -96,7 +98,6 @@ window.renderInventory = function() {
                     if (dbItem.chipData && !item.chipData) item.chipData = JSON.parse(JSON.stringify(dbItem.chipData));
                     if (dbItem.materialData && !item.materialData) item.materialData = JSON.parse(JSON.stringify(dbItem.materialData));
                     if (dbItem.skillData && !item.skillData) item.skillData = JSON.parse(JSON.stringify(dbItem.skillData));
-                    // ★変更: スキルアイテムのdescは動的生成するため、マスターのdescで上書きしない
                     if (item.type !== 'skill' && dbItem.desc && item.desc !== dbItem.desc) item.desc = dbItem.desc;
                 }
             });
@@ -268,7 +269,9 @@ window.switchTab = function(index) {
 };
 
 window.toggleInventory = function() {
-    if (!window.invWindow) return;
+    // ★追加: プレイヤーが存在しない場合は開かないようブロック
+    if (!window.player || !window.invWindow) return;
+    
     const itemDetail = document.getElementById('itemDetail');
     if (window.invWindow.style.display === 'flex') {
         window.invWindow.style.display = 'none'; 
@@ -297,7 +300,6 @@ window.showItemDetail = function(item, index) {
     document.getElementById('detailName').style.color = window.RARITY[item.rarity].color;
     document.getElementById('detailType').innerText = `${item.type} / ${item.rarity}`;
     
-    // ★変更: スキルアイテムの場合は、動的計算関数を使って詳細テキストを生成する
     let descText = item.desc || "";
     if (item.type === 'skill' && typeof window.getCalculatedSkillDesc === 'function') {
         descText = window.getCalculatedSkillDesc(item);
