@@ -137,7 +137,7 @@ window.GameRenderer = (function() {
         ctx.restore();
     }
 
-    // ★追加: イベントアイコン（ワープや街の目印）を描画する処理
+    // イベントアイコン（ワープや街の目印）を描画する処理
     function drawEventIcons(ctx, isWorldMap) {
         if (!window.currentEventMap || !window.currentEvents) return;
         
@@ -273,7 +273,7 @@ window.GameRenderer = (function() {
 
             ctx.strokeStyle = '#ff0000'; ctx.lineWidth = 4; ctx.strokeRect(0, 0, window.world.width, window.world.height);
 
-            // ★追加: 通常マップのイベントアイコン（ワープ等）を描画
+            // 通常マップのイベントアイコン（ワープ等）を描画
             drawEventIcons(ctx, false);
 
             for (const item of window.droppedItems) {
@@ -304,9 +304,18 @@ window.GameRenderer = (function() {
                     if (window.player.isAutoAttacking && !eIsFrozen) { ctx.fillStyle = 'rgba(255, 0, 0, 0.2)'; ctx.fill(); }
                 }
 
-                ctx.beginPath(); ctx.arc(enemy.x, enemy.y, enemy.radius, 0, Math.PI * 2);
-                ctx.fillStyle = enemy.color; ctx.fill();
-                ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke();
+                // ★追加: 敵の画像が設定されていれば描画、なければデフォルトの丸を描画
+                if (enemy.image && enemy.image.complete && enemy.image.naturalWidth > 0) {
+                    ctx.save();
+                    ctx.imageSmoothingEnabled = true;
+                    ctx.imageSmoothingQuality = 'high';
+                    ctx.drawImage(enemy.image, enemy.x - enemy.radius, enemy.y - enemy.radius, enemy.radius * 2, enemy.radius * 2);
+                    ctx.restore();
+                } else {
+                    ctx.beginPath(); ctx.arc(enemy.x, enemy.y, enemy.radius, 0, Math.PI * 2);
+                    ctx.fillStyle = enemy.color; ctx.fill();
+                    ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke();
+                }
                 
                 drawStatusEffects(enemy, ctx); 
                 

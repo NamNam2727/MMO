@@ -165,7 +165,6 @@ window.applyElementEffect = function(attacker, target, element, params = {}, ski
     if (target.id === 'p1') { 
         if (target.equipped.armor && target.equipped.armor.resists && target.equipped.armor.resists.includes(element)) return; 
     } else { 
-        // ★修正: 自身の属性と同じ攻撃（状態異常）は完全に無効化する
         if (target.element && target.element === element) return; 
         if (target.resists && target.resists.includes(element)) return; 
     }
@@ -188,7 +187,7 @@ window.applyElementEffect = function(attacker, target, element, params = {}, ski
     else if (element === 'ice') { duration = duration || 2.0; }
     else if (element === 'lightning') { duration = duration || 3.0; }
     else if (element === 'wind') { duration = duration || 0.5; }
-    else if (element === 'earth') { duration = duration || 0; } // ★追加: 未実装の土属性はスルー
+    else if (element === 'earth') { duration = duration || 0; }
 
     // 状態異常を受けた回数をカウントアップし、免疫時間を計算
     target.effectCounts[effectId] = (target.effectCounts[effectId] || 0) + 1;
@@ -278,6 +277,14 @@ window.spawnEnemy = function(enemyId, level, spawnX, spawnY) {
     const radius = base.radius || 15;
     const initialPos = window.getSafeRandomPosition(spawnX, spawnY, 50, radius, base.isFlying);
 
+    // ★追加: 画像の非同期ロード
+    let imgObj = null;
+    if (base.imageUrl) {
+        imgObj = new Image();
+        const baseURL = (window.MapManager && window.MapManager.baseURL) ? window.MapManager.baseURL : 'https://namnam2727.github.io/MMO/';
+        imgObj.src = baseURL + base.imageUrl;
+    }
+
     return {
         uid: Date.now() + Math.random(),
         id: enemyId,
@@ -286,6 +293,8 @@ window.spawnEnemy = function(enemyId, level, spawnX, spawnY) {
         spawnX: spawnX, spawnY: spawnY,
         x: initialPos.x, y: initialPos.y, targetX: initialPos.x, targetY: initialPos.y,
         path: [], radius: radius, color: base.color || '#ff0000',
+        
+        image: imgObj, // ★追加: 画像オブジェクトを保持
         
         hp: hp, maxHp: hp,
         armor: base.baseArmor || 0, // バフ等で変動させる防御力枠
@@ -312,7 +321,7 @@ window.spawnEnemy = function(enemyId, level, spawnX, spawnY) {
     };
 };
 
-// 現在マップ上に存在する敵の配列 (※生成は後日 MapManager 側で行います)
+// 現在マップ上に存在する敵の配列
 window.enemies = [];
 
 // --- 敵の更新（AIロジック） ---
@@ -340,7 +349,7 @@ window.updateEnemies = function(dt) {
                 }
             }
             
-            // ★修正: 確率ドロップテーブルの処理
+            // 確率ドロップテーブルの処理
             if (e.dropTable && e.dropTable.length > 0 && window.ITEM_DB) {
                 e.dropTable.forEach(drop => {
                     if (Math.random() <= drop.chance) {
@@ -370,7 +379,7 @@ window.updateEnemies = function(dt) {
                 e.x = safePos.x; e.y = safePos.y; e.targetX = e.x; e.targetY = e.y; 
                 e.hp = e.maxHp; e.state = 'idle'; e.hasBeenAttacked = false; 
                 e.hateTable = {}; e.damageTable = {}; e.path = []; e.effects = []; e.effectCounts = {};
-                // ★自己バフなどの状態も初期化
+                // 自己バフなどの状態も初期化
                 if (window.ENEMY_DB && window.ENEMY_DB[e.id]) {
                     e.armor = window.ENEMY_DB[e.id].baseArmor || 0;
                 }
@@ -480,7 +489,7 @@ window.updateEnemies = function(dt) {
         }
 
         // =====================================================
-        // ★ エリアごとの個別JSで定義されたボス固有のAIなどを実行するフック
+        // エリアごとの個別JSで定義されたボス固有のAIなどを実行するフック
         // =====================================================
         if (e.customUpdate && typeof e.customUpdate === 'function') {
             e.customUpdate(e, dt, window.player);

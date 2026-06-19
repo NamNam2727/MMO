@@ -62,7 +62,7 @@ window.ITEM_DB = {
     },
 
     // ==========================================
-    // ★変更: ベースチップの対象と範囲の設定
+    // ベースチップの対象と範囲の設定
     // ==========================================
     'chip_enemy_single_str': { 
         id: 'chip_enemy_single_str', type: 'consume', name: '単体チップ(ちから)', 
@@ -101,7 +101,7 @@ window.ITEM_DB = {
     },
     
     // ==========================================
-    // ★変更: ETC素材の再編（射程延長と範囲拡張）
+    // ETC素材（スキル作成用マテリアル）
     // ==========================================
     'etc_atk_up': { 
         id: 'etc_atk_up', type: 'etc', name: '素材:攻撃倍率+10%', rarity: 'Common', maxStack: 99, color: '#ffaaaa', 
@@ -122,6 +122,12 @@ window.ITEM_DB = {
     'etc_ice': { 
         id: 'etc_ice', type: 'etc', name: '素材:氷属性', rarity: 'Rare', maxStack: 99, color: '#aaaaff', 
         materialData: { cost: 4, effects: [{type: 'ice', value: 1}] } 
+    },
+
+    // ★追加: グライムゼリー
+    'grime_jelly': { 
+        id: 'grime_jelly', type: 'etc', name: 'グライムゼリー', rarity: 'Common', maxStack: 99, color: '#33ccff', 
+        materialData: { cost: 1, dependency: 'int', effects: [{type: 'heal', value: 5}] } 
     }
 };
 
