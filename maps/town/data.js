@@ -224,7 +224,7 @@ window.MapManager.mapDataStore['town'] = {
     // 数字（ID）の意味を定義するリスト
     // ==========================================
     events: {
-        1: { type: 'warp', targetMap: 'worldMap', targetId: 2 , icon: '⬇️'}, // ワールドマップへ移動
+        1: { type: 'warp', targetMap: 'worldMap', targetId: 2 , icon: '⤴️'}, // ワールドマップへ移動
         2: { type: 'spawn' },                                    // ワールドマップから戻ってきた時の着地点
         9: { type: 'spawn', isDefaultSpawn: true }               // ゲーム開始時の初期スポーン地点
     }
