@@ -8,7 +8,11 @@ window.ENEMY_DB = window.ENEMY_DB || {};
 window.ENEMY_DB['grime_01'] = {
     name: 'グライム',
     type: 'passive',      // こちらから攻撃しないと襲ってこない
-    color: '#33ccff',     // スライムっぽい水色（後日、imageUrlで画像に差し替え可能）
+    color: '#33ccff',     
+    
+    // ★追加: 敵の画像パスを指定
+    imageUrl: 'enemy/pic/grime.PNG',
+
     radius: 15,           // 当たり判定の大きさ
     
     speed: 30,            // 歩くスピード（遅め）
@@ -18,7 +22,6 @@ window.ENEMY_DB['grime_01'] = {
     element: 'earth',     // 地属性（地属性の状態異常を与え、プレイヤーからの地属性を無効化）
 
     // --- ベースステータス (Lv1の時の数値) ---
-    // ※生成時にレベルを指定すると、この数値を基準に自動で強くなります
     baseHp: 30,           
     baseAtk: 4,           
     baseArmor: 0,         
@@ -26,11 +29,10 @@ window.ENEMY_DB['grime_01'] = {
     
     // --- ドロップアイテム (確率設定) ---
     dropTable: [
-        { id: 'potion_small', chance: 0.2 } // 20%の確率で「小さなポーション」を落とす
-        // ※将来レアアイテムを追加する場合はここに { id: 'アイテムID', chance: 0.00001 } のように追記します
+        // ★追加: グライムゼリーを75%の確率でドロップ
+        { id: 'grime_jelly', chance: 0.75 } 
     ],
 
     // --- 特殊行動 (AIロジック) ---
-    // グライムはただの雑魚なので特殊行動なし
     customUpdate: null
 };
