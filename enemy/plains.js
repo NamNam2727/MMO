@@ -10,7 +10,7 @@ window.ENEMY_DB['grime_01'] = {
     type: 'passive',      // こちらから攻撃しないと襲ってこない
     color: '#33ccff',     
     
-    // ★追加: 敵の画像パスを指定
+    // 敵の画像パスを指定
     imageUrl: 'enemy/pic/grime.PNG',
 
     radius: 15,           // 当たり判定の大きさ
@@ -19,7 +19,7 @@ window.ENEMY_DB['grime_01'] = {
     attackRange: 40,      // 攻撃が届く距離
     attackRate: 2.0,      // 2秒に1回攻撃（遅め）
     
-    element: 'earth',     // 地属性（地属性の状態異常を与え、プレイヤーからの地属性を無効化）
+    // ★修正: elementの指定を削除し、無属性に変更しました
 
     // --- ベースステータス (Lv1の時の数値) ---
     baseHp: 30,           
@@ -29,8 +29,7 @@ window.ENEMY_DB['grime_01'] = {
     
     // --- ドロップアイテム (確率設定) ---
     dropTable: [
-        // ★追加: グライムゼリーを75%の確率でドロップ
-        { id: 'grime_jelly', chance: 0.75 } 
+        { id: 'grime_jelly', chance: 0.75 } // グライムゼリーを75%の確率でドロップ
     ],
 
     // --- 特殊行動 (AIロジック) ---
