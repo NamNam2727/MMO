@@ -1,19 +1,16 @@
 // =========================================================
 // skill_create.js
 // スキル作成ウィンドウのUI生成、イベント制御、プレビュー更新
-// および作成処理（第2フェーズの実装完了版）
 // =========================================================
 
 (function() {
     window.skillCreateState = { isOpen: false, baseChip: null, materials: [] };
 
     window.initSkillCreateUI = function() {
-        // --- 1. UI生成（スキル作成画面 ＋ 確認ダイアログ） ---
         const skillWin = document.createElement('div');
         skillWin.id = 'skillCreateWindow';
         skillWin.style.cssText = 'position:absolute; display:none; flex-direction:column; width:280px; background:rgba(20,20,20,0.95); border:2px solid #aaa; border-radius:8px; z-index:50; color:#fff; pointer-events:auto; touch-action:none; box-shadow:0 10px 20px rgba(0,0,0,0.8);';
         
-        // ウィンドウの透過防止
         skillWin.addEventListener('pointerdown', (e) => {
             if(window.bringToFront) window.bringToFront('skillCreateWindow');
             e.stopPropagation();
@@ -25,11 +22,10 @@
         skillWin.addEventListener('touchstart', (e) => { e.stopPropagation(); }, {passive: true});
         skillWin.addEventListener('touchend', (e) => {
             e.stopPropagation();
-            if (e.cancelable && e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') {
-                e.preventDefault();
-            }
+            if (e.cancelable && e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') e.preventDefault();
         }, {passive: false});
 
+        // ★変更: ステータス情報(scStatusInfo)を対象・範囲も表示できるように拡張
         skillWin.innerHTML = `
             <div id="scTitleBar" style="cursor:move; background:#444; padding:8px 10px; border-radius:6px 6px 0 0; display:flex; justify-content:space-between; font-weight:bold; font-size:14px; border-bottom:1px solid #666;">
                 <span id="scTitleText">スキル作成</span><span id="scCloseBtn" style="cursor:pointer; padding:0 5px;">❌</span>
@@ -45,9 +41,11 @@
                         <input id="scNameInput" type="text" placeholder="名前を入力" style="width:100%; background:#000; color:#fff; border:1px solid #555; padding:5px; font-size:16px; box-sizing:border-box;">
                     </div>
                 </div>
-                <div id="scStatusInfo" style="display:flex; justify-content:space-between; font-size:12px; font-weight:bold; margin-bottom:8px; background:#333; padding:5px; border-radius:4px;">
-                    <span>依存: <span id="scDepText" style="color:#ffdd00;"></span></span>
-                    <span>コスト: <span id="scCostText">0 / 0</span></span>
+                <div id="scStatusInfo" style="display:flex; justify-content:space-between; flex-wrap:wrap; gap:4px; font-size:11px; font-weight:bold; margin-bottom:8px; background:#333; padding:5px; border-radius:4px;">
+                    <span style="width:48%;">対象: <span id="scTargetText" style="color:#00ffff;"></span></span>
+                    <span style="width:48%; text-align:right;">範囲: <span id="scAreaText" style="color:#00ffff;"></span></span>
+                    <span style="width:48%;">依存: <span id="scDepText" style="color:#ffdd00;"></span></span>
+                    <span style="width:48%; text-align:right;">コスト: <span id="scCostText">0 / 0</span></span>
                 </div>
                 <div id="scMaterialList" style="background:#222; height:auto; overflow-y:visible; border:1px inset #555; padding:5px; margin-bottom:5px; border-radius:4px;"></div>
                 <div id="scErrorText" style="color:#ff5555; font-size:10px; font-weight:bold; text-align:center; min-height:14px; margin-bottom:5px;"></div>
@@ -62,9 +60,7 @@
         
         const stopAll = (e) => { 
             e.stopPropagation(); 
-            if (e.cancelable && e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') {
-                e.preventDefault(); 
-            }
+            if (e.cancelable && e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') e.preventDefault(); 
         };
         confirmOverlay.addEventListener('pointerdown', stopAll);
         confirmOverlay.addEventListener('pointerup', stopAll);
@@ -83,6 +79,7 @@
         confirmDialog.addEventListener('touchstart', stopAll, {passive: false});
         confirmDialog.addEventListener('touchend', stopAll, {passive: false});
 
+        // ★変更: 確認ダイアログにも対象と範囲を表示
         confirmDialog.innerHTML = `
             <div style="background:#444; padding:8px 10px; border-radius:6px 6px 0 0; display:flex; justify-content:space-between; font-weight:bold; font-size:14px; border-bottom:1px solid #666;">
                 <span>確認</span><span id="scConfirmCloseBtn" style="cursor:pointer; padding:0 5px;">❌</span>
@@ -95,9 +92,11 @@
                     <div style="color:#00ffff; margin-bottom:5px; font-weight:bold; border-bottom:1px solid #333; padding-bottom:2px;">■ 効果</div>
                     <div id="confirmEffects" style="color:#ddd; line-height:1.4;"></div>
                 </div>
-                <div style="display:flex; justify-content:space-between; font-weight:bold; margin-bottom:15px; background:#333; padding:5px; border-radius:4px;">
-                    <span>依存: <span id="confirmDep" style="color:#ffdd00;"></span></span>
-                    <span>コスト: <span id="confirmCost" style="color:#55ff55;"></span></span>
+                <div style="display:flex; justify-content:space-between; flex-wrap:wrap; gap:4px; font-weight:bold; margin-bottom:15px; background:#333; padding:5px; border-radius:4px;">
+                    <span style="width:48%;">対象: <span id="confirmTarget" style="color:#00ffff;"></span></span>
+                    <span style="width:48%; text-align:right;">範囲: <span id="confirmArea" style="color:#00ffff;"></span></span>
+                    <span style="width:48%;">依存: <span id="confirmDep" style="color:#ffdd00;"></span></span>
+                    <span style="width:48%; text-align:right;">コスト: <span id="confirmCost" style="color:#55ff55;"></span></span>
                 </div>
                 <div style="text-align:center; margin-bottom:5px; font-weight:bold;">これでよろしいですか？</div>
                 <div id="confirmMissingWarning" style="color:#ff5555; font-size:11px; font-weight:bold; text-align:center; margin-bottom:10px; display:none;">※アイテムが不足しています</div>
@@ -106,7 +105,6 @@
         `;
         document.getElementById('ui-layer').appendChild(confirmDialog);
 
-        // --- 2. ウィンドウ操作（ドラッグと閉じる） ---
         const scTitleBar = document.getElementById('scTitleBar');
         let scIsDragging = false; let scDragOffsetX = 0; let scDragOffsetY = 0;
         scTitleBar.addEventListener('pointerdown', (e) => {
@@ -138,7 +136,6 @@
             window.closeSkillCreateWindow(); 
         });
 
-        // --- 3. D&D 割り込み処理 ---
         window.addEventListener('pointerup', (e) => {
             if (window.isDraggingItem && window.skillCreateState.isOpen) {
                 const x = e.clientX || window.lastDragX;
@@ -184,7 +181,6 @@
                     }
 
                     const slotIdx = parseInt(slot.dataset.slotIdx);
-                    
                     let requiredCount = 1;
                     window.skillCreateState.materials.forEach((m, i) => {
                         if (i !== slotIdx && m && m.id === item.id) requiredCount++;
@@ -205,7 +201,6 @@
                     
                     const matItem = Object.assign({}, item);
                     matItem.count = 1;
-                    
                     window.skillCreateState.materials[slotIdx] = matItem;
                     
                     window.renderSkillCreateSlots();
@@ -215,7 +210,6 @@
             }
         }, { capture: true }); 
 
-        // --- 4. 作成ボタンと確認ダイアログの制御 ---
         document.getElementById('scCreateBtn').addEventListener('pointerdown', (e) => {
             if (document.getElementById('scCreateBtn').disabled) return;
             e.stopPropagation();
@@ -236,36 +230,26 @@
             });
             
             for (const id in requiredMats) {
-                if (!invCounts[id] || invCounts[id] < requiredMats[id]) {
-                    missing = true; break;
-                }
+                if (!invCounts[id] || invCounts[id] < requiredMats[id]) { missing = true; break; }
             }
 
             const icon = document.getElementById('scIconInput').value.trim();
             const name = document.getElementById('scNameInput').value.trim();
-            const chip = window.skillCreateState.baseChip;
-            const dep = chip.chipData.dependency;
             
-            let totalCost = 0;
-            let mergedEffects = {};
-            window.skillCreateState.materials.forEach(mat => {
-                if (mat && mat.materialData) {
-                    totalCost += mat.materialData.cost;
-                    if(mat.materialData.effects) {
-                        mat.materialData.effects.forEach(eff => {
-                            if(!mergedEffects[eff.type]) mergedEffects[eff.type] = 0;
-                            mergedEffects[eff.type] += eff.value; 
-                        });
-                    }
-                }
-            });
-            const finalEffects = Object.keys(mergedEffects).map(k => ({ type: k, value: mergedEffects[k] }));
-            const effectTexts = finalEffects.map(e => window.getEffectText ? window.getEffectText(e) : `${e.type}+${e.value}`);
+            // ★変更: 仮想的なスキルオブジェクトを構築し、getCalculatedSkillDataに計算させる
+            const mockSkill = { skillData: { baseChipId: chipId, materials: window.skillCreateState.materials.filter(m=>m).map(m=>m.id) } };
+            const calcData = window.getCalculatedSkillData(mockSkill);
+            
+            const targetStr = calcData.targetType === 'enemy' ? '敵' : calcData.targetType === 'ally' ? '味方' : '自身';
+            const areaStr = calcData.areaType === 'circle' ? '円範囲' : '単体';
+            const effectTexts = calcData.effects.map(e => window.getEffectText ? window.getEffectText(e) : `${e.type}+${e.value}`);
             
             document.getElementById('confirmIcon').innerText = icon;
             document.getElementById('confirmName').innerText = name;
-            document.getElementById('confirmDep').innerText = dep === 'str' ? 'ちから' : dep === 'int' ? 'まりょく' : 'なし';
-            document.getElementById('confirmCost').innerText = totalCost;
+            document.getElementById('confirmTarget').innerText = targetStr;
+            document.getElementById('confirmArea').innerText = areaStr;
+            document.getElementById('confirmDep').innerText = calcData.dependency === 'str' ? 'ちから' : calcData.dependency === 'int' ? 'まりょく' : 'なし';
+            document.getElementById('confirmCost').innerText = calcData.cost;
             
             const effElem = document.getElementById('confirmEffects');
             if(effectTexts.length > 0) effElem.innerHTML = effectTexts.map(t => '・'+t).join('<br>');
@@ -318,30 +302,22 @@
                 }
             });
 
-            let totalCost = 0;
-            let mergedEffects = {};
-            window.skillCreateState.materials.forEach(mat => {
-                if (mat && mat.materialData) {
-                    totalCost += mat.materialData.cost;
-                    if(mat.materialData.effects) {
-                        mat.materialData.effects.forEach(eff => {
-                            if(!mergedEffects[eff.type]) mergedEffects[eff.type] = 0;
-                            mergedEffects[eff.type] += eff.value; 
-                        });
-                    }
-                }
-            });
-            const finalEffects = Object.keys(mergedEffects).map(k => ({ type: k, value: mergedEffects[k] }));
-            const effectTexts = finalEffects.map(e => window.getEffectText ? window.getEffectText(e) : `${e.type}+${e.value}`);
+            const materialIds = window.skillCreateState.materials.filter(mat => mat !== null).map(mat => mat.id);
 
-            // ★詠唱・CT表記を削除し、依存を「ちから/まりょく」に修正
-            const depText = chipItem.chipData.dependency === 'str' ? 'ちから' : 'まりょく';
-            
             const newSkill = {
-                id: 'skill_' + Date.now(), uid: 'uid_' + Date.now(), type: 'skill',
-                name: name, icon: icon, rarity: chipItem.rarity, color: chipItem.color, maxStack: 1,
-                desc: `コスト:${totalCost} 依存:${depText}\n【効果】\n${effectTexts.length > 0 ? effectTexts.map(t=>'・'+t).join('\n') : 'なし'}`,
-                skillData: { cost: totalCost, dependency: chipItem.chipData.dependency, effects: finalEffects }
+                id: 'skill_' + Date.now(), 
+                uid: 'uid_' + Date.now(), 
+                type: 'skill',
+                name: name, 
+                icon: icon, 
+                rarity: chipItem.rarity, 
+                color: chipItem.color, 
+                maxStack: 1,
+                desc: "", 
+                skillData: { 
+                    baseChipId: chipItem.id,
+                    materials: materialIds
+                }
             };
 
             window.addItemToInventory(newSkill);
@@ -354,12 +330,10 @@
             if (typeof window.renderInventory === 'function') window.renderInventory();
         });
 
-        // プレビューのリアルタイム更新イベント
         document.getElementById('scIconInput').addEventListener('input', window.updateSkillUI);
         document.getElementById('scNameInput').addEventListener('input', window.updateSkillUI);
     };
 
-    // --- 5. 公開関数群 ---
     window.openSkillCreateWindow = function(chipItem) {
         window.skillCreateState.isOpen = true;
         window.skillCreateState.baseChip = chipItem;
@@ -451,21 +425,18 @@
         const name = nameInput.value.trim();
         const chip = window.skillCreateState.baseChip;
         const capacity = chip.chipData.capacity;
-        const dep = chip.chipData.dependency;
         
-        let totalCost = 0;
-        let mergedEffects = {};
-        window.skillCreateState.materials.forEach(mat => {
-            if (mat && mat.materialData) {
-                totalCost += mat.materialData.cost;
-                if(mat.materialData.effects) {
-                    mat.materialData.effects.forEach(eff => {
-                        if(!mergedEffects[eff.type]) mergedEffects[eff.type] = 0;
-                        mergedEffects[eff.type] += eff.value; 
-                    });
-                }
+        // ★変更: モックスキルオブジェクトを作ってgetCalculatedSkillDataに計算させる
+        const mockSkill = {
+            skillData: {
+                baseChipId: chip.id,
+                materials: window.skillCreateState.materials.filter(m => m !== null).map(m => m.id)
             }
-        });
+        };
+        const calcData = window.getCalculatedSkillData(mockSkill);
+        
+        let mergedEffects = {};
+        calcData.effects.forEach(e => { mergedEffects[e.type] = e.value; });
         
         const createBtn = document.getElementById('scCreateBtn');
         let errorMsg = '';
@@ -475,9 +446,9 @@
             errorMsg = '※アイコン(絵文字)を正しく入力してください。';
         } else if (!name) {
             errorMsg = '※スキル名を入力してください。';
-        } else if (totalCost > capacity) {
+        } else if (calcData.cost > capacity) {
             errorMsg = '※コストが容量をオーバーしています。';
-        } else if (totalCost <= 0 && window.skillCreateState.materials.some(m => m !== null)) {
+        } else if (calcData.cost <= 0 && window.skillCreateState.materials.some(m => m !== null)) {
             errorMsg = '※合計コストは1以上必要です。';
         } else {
             for (let type in mergedEffects) {
@@ -497,10 +468,17 @@
             }
         }
         
-        document.getElementById('scDepText').innerText = dep === 'str' ? 'ちから' : dep === 'int' ? 'まりょく' : 'なし';
+        // ★変更: 対象と範囲の表示反映
+        let targetStr = calcData.targetType === 'enemy' ? '敵' : calcData.targetType === 'ally' ? '味方' : '自身';
+        let areaStr = calcData.areaType === 'circle' ? '円範囲' : '単体';
+
+        document.getElementById('scTargetText').innerText = targetStr;
+        document.getElementById('scAreaText').innerText = areaStr;
+        document.getElementById('scDepText').innerText = calcData.dependency === 'str' ? 'ちから' : calcData.dependency === 'int' ? 'まりょく' : 'なし';
+        
         const costTextElem = document.getElementById('scCostText');
-        costTextElem.innerText = `${totalCost} / ${capacity}`;
-        costTextElem.style.color = (totalCost > capacity || totalCost <= 0) ? '#ff5555' : '#55ff55';
+        costTextElem.innerText = `${calcData.cost} / ${capacity}`;
+        costTextElem.style.color = (calcData.cost > capacity || calcData.cost <= 0) ? '#ff5555' : '#55ff55';
         
         document.getElementById('scErrorText').innerText = errorMsg;
         

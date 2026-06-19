@@ -11,7 +11,6 @@
     
     // --- UI（詠唱バー・バフコンテナ・CSS）の自動生成 ---
     function initSkillUI() {
-        // 1. スキル用・バフ用のCSSを動的に追加
         if (!document.getElementById('skillStyle')) {
             const style = document.createElement('style');
             style.id = 'skillStyle';
@@ -39,113 +38,99 @@
         const uiLayer = document.getElementById('ui-layer');
         if (!uiLayer) return;
 
-        // 2. 詠唱バーの追加
         if (!document.getElementById('castBarContainer')) {
             const castBar = document.createElement('div');
             castBar.id = 'castBarContainer';
-            castBar.innerHTML = `
-                <div id="castBarFill"></div>
-                <div id="castBarText">詠唱中...</div>
-            `;
+            castBar.innerHTML = `<div id="castBarFill"></div><div id="castBarText">詠唱中...</div>`;
             uiLayer.appendChild(castBar);
         }
 
-        // 3. バフコンテナの追加
         if (!document.getElementById('buffContainer')) {
             const buffCont = document.createElement('div');
             buffCont.id = 'buffContainer';
             uiLayer.appendChild(buffCont);
         }
 
-        // 4. バフ詳細ウィンドウの追加
         if (!document.getElementById('buffDetailWindow')) {
             const buffDet = document.createElement('div');
             buffDet.id = 'buffDetailWindow';
-            buffDet.innerHTML = `
-                <div id="bdHeader"><span id="bdIcon"></span><span id="bdName"></span></div>
-                <div id="bdEffectList"></div>
-            `;
+            buffDet.innerHTML = `<div id="bdHeader"><span id="bdIcon"></span><span id="bdName"></span></div><div id="bdEffectList"></div>`;
             uiLayer.appendChild(buffDet);
         }
     }
     
-    // スクリプト読み込み時にUIを生成
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', initSkillUI);
-    } else {
-        initSkillUI();
-    }
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initSkillUI);
+    else initSkillUI();
 
     // --- 1. スキルの準備とターゲット判定 ---
     window.prepareSkill = function(skillItem) {
-        // クールタイム中の場合は使用不可
         if (window.itemCooldowns && window.itemCooldowns[skillItem.id] > 0) {
             if (typeof window.addLog === 'function') window.addLog("<span class='color-sys'>まだ使用できません。</span>", 'sys');
             return;
         }
 
-        const cost = skillItem.skillData.cost;
-        const dep = skillItem.skillData.dependency;
+        const calcData = window.getCalculatedSkillData(skillItem);
+        const cost = calcData.cost;
         
-        if (dep === 'int' && window.player.mp < cost) {
+        if (calcData.dependency === 'int' && window.player.mp < cost) {
             if (typeof window.addLog === 'function') window.addLog("<span class='color-sys'>MPが不足しています。</span>", 'sys'); 
             return;
         }
         
-        const effects = skillItem.skillData.effects;
-        const hasTargetSelf = effects.some(e => e.type === 'target_self');
-        const hasAreaSelf = effects.some(e => e.type === 'area_self');
-        
-        if (hasTargetSelf || hasAreaSelf) {
-            startCasting(skillItem, window.player, hasTargetSelf, hasAreaSelf); 
-        } else if (window.player.targetEnemy && window.player.targetEnemy.state !== 'dead') {
-            window.player.pendingSkill = skillItem;
-            window.player.pendingSkillTarget = window.player.targetEnemy;
-            window.targetingSkill = null;
+        // 自身対象スキルは即詠唱開始
+        if (calcData.targetType === 'self') {
+            startCasting(skillItem, window.player); 
         } else {
-            window.targetingSkill = skillItem;
-            if (typeof window.addLog === 'function') window.addLog("<span class='color-sys'>ターゲットを選択してください。（画面内の敵をタップ）</span>", 'sys');
+            // 敵対象スキルで、現在ターゲットしている敵がいればそれを対象にする
+            let validTarget = null;
+            if (calcData.targetType === 'enemy' && window.player.targetEnemy && window.player.targetEnemy.state !== 'dead') {
+                validTarget = window.player.targetEnemy;
+            }
+            // ※味方対象の場合は、現状オートターゲットがないため手動選択(targetingSkill)に回す
+
+            if (validTarget) {
+                window.player.pendingSkill = skillItem;
+                window.player.pendingSkillTarget = validTarget;
+                window.targetingSkill = null;
+            } else {
+                window.targetingSkill = skillItem;
+                const targetName = calcData.targetType === 'enemy' ? '敵' : '味方';
+                if (typeof window.addLog === 'function') window.addLog(`<span class='color-sys'>ターゲットを選択してください。（画面内の${targetName}をタップ）</span>`, 'sys');
+            }
         }
     };
 
-    // 詠唱開始処理
-    function startCasting(skill, target, isTargetSelf, isArea) {
-        const cost = skill.skillData.cost;
-        const castTime = cost * 0.1; // 詠唱時間 = コスト × 0.1秒
+    function startCasting(skill, target) {
+        const calcData = window.getCalculatedSkillData(skill);
+        const cost = calcData.cost;
+        const castTime = cost * 0.1;
         
         if (castTime <= 0) {
-            executeSkill(skill, target, isTargetSelf, isArea);
+            executeSkill(skill, target);
         } else {
             window.player.castingSkill = skill;
             window.player.castingTarget = target;
-            window.player.castingIsTargetSelf = isTargetSelf;
-            window.player.castingIsArea = isArea;
             window.player.castTimer = castTime;
             window.player.maxCastTime = castTime;
             
-            // 自動攻撃を中断し、状態を保存
             window.player.wasAutoAttacking = window.player.isAutoAttacking;
             window.player.isAutoAttacking = false;
-            
             window.playerPath = []; 
             if (typeof window.addLog === 'function') window.addLog(`<span class='color-sys'>${skill.name} の詠唱を開始...</span>`, 'sys');
         }
     }
 
-    // 画面タップによるターゲット指定および詠唱キャンセル
     window.addEventListener('pointerdown', (e) => {
         if (e.target.closest('#ui-layer')) return;
-        
-        // タップ移動による詠唱キャンセル
         if (window.player && window.player.castingSkill) {
             window.player.castingSkill = null;
             window.player.castingTarget = null;
             window.player.castTimer = 0;
-            // キャンセルされた場合は自動攻撃は再開しない
             if (typeof window.addLog === 'function') window.addLog("<span class='color-sys'>詠唱がキャンセルされました。</span>", 'sys');
         }
     }, { capture: true });
 
+    // スキル用ターゲット選択（タップ時）
     window.addEventListener('pointerup', (e) => {
         if (window.targetingSkill) {
             e.stopPropagation(); e.stopImmediatePropagation();
@@ -153,19 +138,29 @@
             const targetX = (e.clientX - rect.left) + window.camera.x; 
             const targetY = (e.clientY - rect.top) + window.camera.y;
             
+            const calcData = window.getCalculatedSkillData(window.targetingSkill);
             let clickedTarget = null;
-            for (const enemy of window.enemies) {
-                if (enemy.state !== 'dead' && Math.hypot(enemy.x - targetX, enemy.y - targetY) <= enemy.radius + 15) {
-                    clickedTarget = enemy; break; 
-                }
-            }
             
+            if (calcData.targetType === 'enemy') {
+                for (const enemy of window.enemies) {
+                    if (enemy.state !== 'dead' && Math.hypot(enemy.x - targetX, enemy.y - targetY) <= enemy.radius + 15) {
+                        clickedTarget = enemy; break; 
+                    }
+                }
+            } else if (calcData.targetType === 'ally') {
+                // 自分自身をタップした場合の判定
+                if (Math.hypot(window.player.x - targetX, window.player.y - targetY) <= window.player.radius + 15) {
+                    clickedTarget = window.player;
+                }
+                // ※将来マルチプレイヤー対応時、ここに他プレイヤーのタップ判定を追加
+            }
+
             if (clickedTarget) {
                 window.player.pendingSkill = window.targetingSkill;
                 window.player.pendingSkillTarget = clickedTarget;
                 window.targetingSkill = null;
             } else {
-                if (typeof window.addLog === 'function') window.addLog("<span class='color-sys'>キャンセルしました。(敵をタップしてください)</span>", 'sys');
+                if (typeof window.addLog === 'function') window.addLog("<span class='color-sys'>キャンセルしました。</span>", 'sys');
                 window.targetingSkill = null;
             }
         }
@@ -176,7 +171,6 @@
     function skillWatchLoop() {
         let now = performance.now(); let dt = (now - lastTimeSkill) / 1000; lastTimeSkill = now;
 
-        // バフ時間の更新
         if (window.player && window.player.skillEffects) {
             let statsChanged = false;
             for (let key in window.player.skillEffects) {
@@ -191,7 +185,6 @@
             }
         }
 
-        // 詠唱ゲージの更新とスキル発動
         const castBarContainer = document.getElementById('castBarContainer');
         const castBarFill = document.getElementById('castBarFill');
         
@@ -207,16 +200,13 @@
             if (window.player.castTimer <= 0) {
                 const skill = window.player.castingSkill;
                 const target = window.player.castingTarget;
-                const isTargetSelf = window.player.castingIsTargetSelf;
-                const isArea = window.player.castingIsArea;
                 
                 window.player.castingSkill = null;
                 window.player.castingTarget = null;
                 
                 if (castBarContainer) castBarContainer.style.display = 'none';
-                executeSkill(skill, target, isTargetSelf, isArea);
+                executeSkill(skill, target);
                 
-                // 自動攻撃の再開
                 if (window.player.wasAutoAttacking) {
                     window.player.isAutoAttacking = true;
                     window.player.wasAutoAttacking = false;
@@ -226,7 +216,7 @@
             if (castBarContainer) castBarContainer.style.display = 'none';
         }
 
-        // ターゲットへの移動と発動距離の判定（詠唱中は追従しない）
+        // ターゲットへの移動と発動距離の判定
         if (window.player && window.player.pendingSkill && window.player.pendingSkillTarget && !window.player.castingSkill) {
             const target = window.player.pendingSkillTarget;
             const skill = window.player.pendingSkill;
@@ -235,15 +225,15 @@
             if (!pIsFrozen) {
                 const dist = Math.hypot(target.x - window.player.x, target.y - window.player.y);
                 let range = window.player.attackRange;
-                let hasArea = false;
                 
-                skill.skillData.effects.forEach(e => {
+                const calcData = window.getCalculatedSkillData(skill);
+                // 射程延長（range_up）のみを判定
+                calcData.effects.forEach(e => {
                     if (e.type === 'range_up') range += (e.value * 10);
-                    if (e.type === 'area_self') { range += (e.value * 10); hasArea = true; }
                 });
                 
                 if (dist <= range || target === window.player) {
-                    startCasting(skill, target, target === window.player, hasArea);
+                    startCasting(skill, target);
                     window.player.pendingSkill = null; window.player.pendingSkillTarget = null; window.playerPath = []; 
                 } else if (window.playerPath.length === 0 && typeof window.findPath === 'function') {
                     window.playerPath = window.findPath(window.player.x, window.player.y, target.x, target.y);
@@ -251,7 +241,6 @@
             }
         }
 
-        // CT(クールタイム)の暗転表示を更新
         document.querySelectorAll('.ct-overlay, .ct-overlay-sc').forEach(overlay => {
             const id = overlay.getAttribute('data-ct-id');
             if (window.itemCooldowns && window.itemCooldowns[id] > 0) {
@@ -263,7 +252,6 @@
             }
         });
 
-        // --- バフUIの監視と描画更新 ---
         if (window.player && window.player.activeBuffs) {
             let buffsChanged = false;
             let uiNeedsUpdate = false;
@@ -321,7 +309,6 @@
         requestAnimationFrame(skillWatchLoop);
     }
 
-    // 監視ループ開始
     setTimeout(() => { requestAnimationFrame(skillWatchLoop); }, 200);
 
     // --- 3. スキルの実処理（効果適用） ---
@@ -329,7 +316,6 @@
         const container = document.getElementById('buffContainer');
         if (!container) return;
         container.innerHTML = '';
-
         if (!window.player.activeBuffs) return;
 
         window.player.activeBuffs.forEach((buff, idx) => {
@@ -347,7 +333,6 @@
                 const rect = slot.getBoundingClientRect();
                 window.showBuffDetail(buff, rect);
             });
-
             container.appendChild(slot);
         });
     };
@@ -378,7 +363,6 @@
                 list.appendChild(div);
             });
         }
-
         win.style.display = 'block';
         win.style.top = (rect.bottom + 10) + 'px';
         win.style.left = Math.max(10, rect.left) + 'px';
@@ -387,31 +371,29 @@
     window.addEventListener('pointerdown', (e) => {
         const win = document.getElementById('buffDetailWindow');
         if (win && win.style.display === 'block') {
-            if (!e.target.closest('.buff-slot') && !e.target.closest('#buffDetailWindow')) {
-                win.style.display = 'none';
-            }
+            if (!e.target.closest('.buff-slot') && !e.target.closest('#buffDetailWindow')) win.style.display = 'none';
         }
     });
 
     function invalidateOldBuffs(type) {
         if(!window.player.activeBuffs) return;
         window.player.activeBuffs.forEach(b => {
-            b.effects.forEach(e => {
-                if (e.type === type) e.isActive = false;
-            });
+            b.effects.forEach(e => { if (e.type === type) e.isActive = false; });
         });
     }
 
-    function executeSkill(skill, target, isTargetSelf, isArea) {
-        const cost = skill.skillData.cost;
-        const dep = skill.skillData.dependency;
+    function executeSkill(skill, target) {
+        const calcData = window.getCalculatedSkillData(skill);
+        const cost = calcData.cost;
+        const dep = calcData.dependency;
+        const targetType = calcData.targetType;
+        const areaType = calcData.areaType;
+        const effects = calcData.effects;
         
-        // クールタイムの設定 = コスト × 0.2秒
         const coolTime = cost * 0.2;
         window.itemCooldowns[skill.id] = coolTime;
         window.itemMaxCooldowns[skill.id] = coolTime;
         
-        // コスト消費
         if (dep === 'int') {
             if (window.player.mp < cost) { 
                 if (typeof window.addLog === 'function') window.addLog("<span class='color-sys'>MPが不足しています。</span>", 'sys'); 
@@ -425,19 +407,29 @@
         if(typeof window.updateWidgetUI === 'function') window.updateWidgetUI();
         if (typeof window.addLog === 'function') window.addLog(`<span class='color-status'>${skill.name} を発動！</span>`, 'sys');
 
+        // ★変更: ターゲットの収集（単体・円範囲）
         let targets = [];
-        if (isArea) {
-            let range = window.player.attackRange;
-            skill.skillData.effects.forEach(e => { 
-                if(e.type === 'range_up' || e.type === 'area_self') range += (e.value * 10); 
-            });
-            if (isTargetSelf) { targets.push(window.player); } 
-            else {
-                window.enemies.forEach(e => {
-                    if (e.state !== 'dead' && Math.hypot(e.x - window.player.x, e.y - window.player.y) <= range) targets.push(e);
-                });
+        if (targetType === 'self') {
+            targets.push(window.player);
+        } else {
+            if (areaType === 'circle') {
+                // デフォルトの範囲半径(例:50) + スキル範囲拡張(area_up)による増加分
+                let areaRadius = 50; 
+                effects.forEach(e => { if(e.type === 'area_up') areaRadius += (e.value * 10); });
+                
+                if (targetType === 'enemy') {
+                    window.enemies.forEach(e => {
+                        // ターゲットを中心に指定半径内の敵を巻き込む
+                        if (e.state !== 'dead' && Math.hypot(e.x - target.x, e.y - target.y) <= areaRadius) targets.push(e);
+                    });
+                } else if (targetType === 'ally') {
+                    // 味方円範囲の場合、自身を含める
+                    if (Math.hypot(window.player.x - target.x, window.player.y - target.y) <= areaRadius) targets.push(window.player);
+                }
+            } else {
+                targets.push(target); // 単体
             }
-        } else { targets.push(target); }
+        }
 
         const durationTime = cost * 10;
         const freezeTime = cost * 0.1;
@@ -458,15 +450,14 @@
                     effects: []
                 };
 
-                skill.skillData.effects.forEach(eff => {
+                effects.forEach(eff => {
                     if (eff.type === 'atk_up') {
                         hasBuff = true;
                         invalidateOldBuffs('atk_up');
                         newBuff.effects.push({ type: 'atk_up', value: eff.value, isActive: true });
                         effLogs.push(typeof window.getEffectText === 'function' ? window.getEffectText(eff) : `攻撃倍率${eff.value > 0 ? '+' : ''}${eff.value}%`);
-                    } else if (eff.type === 'range_up') {
-                        // 射程はバフではないためリストに登録しない（表示のみ）
-                        effLogs.push(typeof window.getEffectText === 'function' ? window.getEffectText(eff) : `射程${eff.value > 0 ? '+' : ''}${eff.value}`);
+                    } else if (eff.type === 'range_up' || eff.type === 'area_up') {
+                        effLogs.push(typeof window.getEffectText === 'function' ? window.getEffectText(eff) : `${eff.type}+${eff.value}`);
                     } else if (eff.type === 'ice') {
                         hasBuff = true;
                         invalidateOldBuffs('ice');
@@ -485,7 +476,7 @@
                     window.renderBuffsUI();
                 }
             } else {
-                skill.skillData.effects.forEach(eff => {
+                effects.forEach(eff => {
                     if (eff.type === 'atk_up') damageMultiplier += (eff.value / 100); 
                     else if (eff.type === 'ice') {
                         if (typeof window.applyElementEffect === 'function') window.applyElementEffect(window.player, t, 'ice', { duration: freezeTime }); 
@@ -494,12 +485,10 @@
                 });
 
                 if (damageMultiplier > 0) {
-                    // まりょく(int)依存の場合は MATK を参照してダメージ計算
                     let baseDamage = window.player.atk;
                     if (dep === 'int') {
                         baseDamage = (window.player.matk !== undefined) ? window.player.matk : Math.floor(window.player.atk * 0.5);
                     }
-                    
                     let dmg = baseDamage * damageMultiplier;
                     const actualDamage = Math.min(t.hp, dmg * (100 / (100 + (t.armor || 0)))); 
                     t.hp -= actualDamage;
@@ -593,7 +582,6 @@
                         if (window.tabsList[window.currentTabIndex] === tab) {
                             const slot = document.querySelector(`.inv-slot[data-idx="${idx}"] .item-icon`);
                             if (slot) {
-                                // スキル用にCTオーバーレイを追加
                                 if (!slot.querySelector('.ct-overlay')) {
                                     slot.innerHTML = `<div class="ct-overlay" data-ct-id="${item.id}" style="position: absolute; bottom: 0; left: 0; width: 100%; background: rgba(0,0,0,0.7); height: 0%;"></div>` + slot.innerHTML;
                                 }

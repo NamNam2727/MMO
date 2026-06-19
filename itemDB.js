@@ -7,7 +7,7 @@
 window.RARITY = { 
     Common: { color: '#ffffff' }, 
     Uncommon: { color: '#00ff00' }, 
-    Rare: { color: '#00bfff' }, // ★修正: 見やすい水色に変更
+    Rare: { color: '#00bfff' }, 
     Epic: { color: '#800080' }, 
     Legend: { color: '#ffa500' } 
 };
@@ -62,39 +62,62 @@ window.ITEM_DB = {
     },
 
     // ==========================================
-    // ★追加: スキル作成用のチップとETC素材
+    // ★変更: ベースチップの対象と範囲の設定
     // ==========================================
-    'chip_test_str': { 
-        id: 'chip_test_str', type: 'consume', name: '力チップ(テスト)', 
-        rarity: 'Epic', maxStack: 99, color: '#aa5500', desc: 'ちから依存スキルのベース\n(最大容量: 20)', 
-        chipData: { capacity: 20, dependency: 'str' } 
+    'chip_enemy_single_str': { 
+        id: 'chip_enemy_single_str', type: 'consume', name: '単体チップ(ちから)', 
+        rarity: 'Epic', maxStack: 99, color: '#aa5500', desc: 'ちから依存/敵単体\n(最大容量: 20)', 
+        chipData: { capacity: 20, dependency: 'str', targetType: 'enemy', areaType: 'single' } 
     },
-    'chip_test_int': { 
-        id: 'chip_test_int', type: 'consume', name: '魔力チップ(テスト)', 
-        rarity: 'Epic', maxStack: 99, color: '#5500aa', desc: 'まりょく依存スキルのベース\n(最大容量: 20)', 
-        chipData: { capacity: 20, dependency: 'int' } 
+    'chip_enemy_single_int': { 
+        id: 'chip_enemy_single_int', type: 'consume', name: '単体チップ(まりょく)', 
+        rarity: 'Epic', maxStack: 99, color: '#5500aa', desc: 'まりょく依存/敵単体\n(最大容量: 20)', 
+        chipData: { capacity: 20, dependency: 'int', targetType: 'enemy', areaType: 'single' } 
+    },
+    'chip_enemy_circle_str': { 
+        id: 'chip_enemy_circle_str', type: 'consume', name: '円範囲チップ(ちから)', 
+        rarity: 'Epic', maxStack: 99, color: '#cc6600', desc: 'ちから依存/敵円範囲\n(最大容量: 30)', 
+        chipData: { capacity: 30, dependency: 'str', targetType: 'enemy', areaType: 'circle' } 
+    },
+    'chip_enemy_circle_int': { 
+        id: 'chip_enemy_circle_int', type: 'consume', name: '円範囲チップ(まりょく)', 
+        rarity: 'Epic', maxStack: 99, color: '#6600cc', desc: 'まりょく依存/敵円範囲\n(最大容量: 30)', 
+        chipData: { capacity: 30, dependency: 'int', targetType: 'enemy', areaType: 'circle' } 
+    },
+    'chip_self_str': { 
+        id: 'chip_self_str', type: 'consume', name: '自身チップ(ちから)', 
+        rarity: 'Epic', maxStack: 99, color: '#aa8800', desc: 'ちから依存/自身対象\n(最大容量: 20)', 
+        chipData: { capacity: 20, dependency: 'str', targetType: 'self', areaType: 'single' } 
+    },
+    'chip_ally_single_int': { 
+        id: 'chip_ally_single_int', type: 'consume', name: '味方単体チップ(まりょく)', 
+        rarity: 'Epic', maxStack: 99, color: '#00aa55', desc: 'まりょく依存/味方単体\n(最大容量: 20)', 
+        chipData: { capacity: 20, dependency: 'int', targetType: 'ally', areaType: 'single' } 
+    },
+    'chip_ally_circle_int': { 
+        id: 'chip_ally_circle_int', type: 'consume', name: '味方円範囲チップ(まりょく)', 
+        rarity: 'Epic', maxStack: 99, color: '#00cc66', desc: 'まりょく依存/味方円範囲\n(最大容量: 30)', 
+        chipData: { capacity: 30, dependency: 'int', targetType: 'ally', areaType: 'circle' } 
     },
     
-    // ETC素材は desc を後から自動生成するため省略
+    // ==========================================
+    // ★変更: ETC素材の再編（射程延長と範囲拡張）
+    // ==========================================
     'etc_atk_up': { 
         id: 'etc_atk_up', type: 'etc', name: '素材:攻撃倍率+10%', rarity: 'Common', maxStack: 99, color: '#ffaaaa', 
         materialData: { cost: 2, effects: [{type: 'atk_up', value: 10}] } 
     },
     'etc_range_up': { 
-        id: 'etc_range_up', type: 'etc', name: '素材:射程+5', rarity: 'Common', maxStack: 99, color: '#aaffaa', 
+        id: 'etc_range_up', type: 'etc', name: '素材:スキル射程延長', rarity: 'Common', maxStack: 99, color: '#aaffaa', 
         materialData: { cost: 2, effects: [{type: 'range_up', value: 5}] } 
+    },
+    'etc_area_up': { 
+        id: 'etc_area_up', type: 'etc', name: '素材:スキル範囲拡張', rarity: 'Uncommon', maxStack: 99, color: '#ffaaff', 
+        materialData: { cost: 4, effects: [{type: 'area_up', value: 5}] } 
     },
     'etc_heal': { 
         id: 'etc_heal', type: 'etc', name: '素材:回復30%', rarity: 'Rare', maxStack: 99, color: '#aaffff', 
         materialData: { cost: 6, dependency: 'int', effects: [{type: 'heal', value: 30}] } 
-    },
-    'etc_target_self': { 
-        id: 'etc_target_self', type: 'etc', name: '素材:対象変更<自身>', rarity: 'Common', maxStack: 99, color: '#ffffaa', 
-        materialData: { cost: 0, effects: [{type: 'target_self', value: 1}] } 
-    },
-    'etc_area_self': { 
-        id: 'etc_area_self', type: 'etc', name: '素材:効果範囲<自身周囲>', rarity: 'Uncommon', maxStack: 99, color: '#ffaaff', 
-        materialData: { cost: 4, effects: [{type: 'area_self', value: 5}] } 
     },
     'etc_ice': { 
         id: 'etc_ice', type: 'etc', name: '素材:氷属性', rarity: 'Rare', maxStack: 99, color: '#aaaaff', 
@@ -108,7 +131,6 @@ window.ITEM_DB = {
 for (const id in window.ITEM_DB) {
     const item = window.ITEM_DB[id];
     if (item.type === 'etc' && item.materialData && item.materialData.effects) {
-        // skill_db.js の getEffectText を使用してテキスト化
         const effTexts = item.materialData.effects.map(e => {
             if (typeof window.getEffectText === 'function') {
                 return window.getEffectText(e);

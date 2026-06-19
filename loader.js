@@ -15,7 +15,8 @@
         'utils.js',
         'mapManager.js',   
         'entities.js',
-        'inventory.js',    
+        'inventory_ui.js',     // ★変更: 分割したUIファイル
+        'inventory_action.js', // ★変更: 分割したアクションファイル
         'shortcut.js',     
         'status_ui.js',    
         'chat_system.js',  
@@ -68,6 +69,7 @@
 
         // UI関連の初期化を実行
         if (typeof window.initUI === 'function') window.initUI();
+        if (typeof window.initInventoryUI === 'function') window.initInventoryUI(); // ★念のためインベントリ初期化も確実に行う
         if (typeof window.initSkillCreateUI === 'function') window.initSkillCreateUI();
 
         // メインループの開始
