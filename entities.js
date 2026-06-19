@@ -98,7 +98,6 @@ window.addExp = function(amount) {
         window.player.statPoints += 5; 
         leveledUp = true;
         
-        // ★ログ追加: レベルアップ
         if(typeof window.addLog === 'function') {
             window.addLog(`<span class='color-sys'>レベルが <span class='color-player'>${window.player.level}</span> に上がった！ステータスポイントを獲得！</span>`, 'exp');
         }
@@ -136,7 +135,6 @@ window.addItemToInventory = function(itemData) {
 
 window.checkPlayerDeath = function() {
     if (window.player.hp <= 0) {
-        // ★ログ追加: 死亡
         if(typeof window.addLog === 'function' && typeof window.getEntityName === 'function') {
             window.addLog(`<span class='color-sys'>${window.getEntityName(window.player)} は力尽きた...</span>`, 'sys');
         }
@@ -147,7 +145,7 @@ window.checkPlayerDeath = function() {
         window.player.targetEnemy = null; window.player.isAutoAttacking = false; window.player.targetItem = null;
         window.playerPath = [];
         window.player.effects = []; 
-        window.player.effectCounts = {}; // 死亡時に状態異常の回数をリセット
+        window.player.effectCounts = {}; 
         
         for(let enemy of window.enemies) {
             enemy.hateTable = {};
@@ -167,6 +165,8 @@ window.applyElementEffect = function(attacker, target, element, params = {}, ski
     if (target.id === 'p1') { 
         if (target.equipped.armor && target.equipped.armor.resists && target.equipped.armor.resists.includes(element)) return; 
     } else { 
+        // ★修正: 自身の属性と同じ攻撃（状態異常）は完全に無効化する
+        if (target.element && target.element === element) return; 
         if (target.resists && target.resists.includes(element)) return; 
     }
 
@@ -188,12 +188,12 @@ window.applyElementEffect = function(attacker, target, element, params = {}, ski
     else if (element === 'ice') { duration = duration || 2.0; }
     else if (element === 'lightning') { duration = duration || 3.0; }
     else if (element === 'wind') { duration = duration || 0.5; }
+    else if (element === 'earth') { duration = duration || 0; } // ★追加: 未実装の土属性はスルー
 
     // 状態異常を受けた回数をカウントアップし、免疫時間を計算
     target.effectCounts[effectId] = (target.effectCounts[effectId] || 0) + 1;
-    let immuneTime = duration * target.effectCounts[effectId]; // 回数分だけ免疫時間が倍増
+    let immuneTime = duration * target.effectCounts[effectId];
 
-    // ★ログ追加: 状態異常の付与
     if(typeof window.addLog === 'function' && typeof window.getEntityName === 'function') {
         window.addLog(`${window.getEntityName(attacker)} は ${window.getEntityName(target)} に <span class='color-status'>【${window.transElement[element]}】</span> を与えた！`, 'damage');
     }
@@ -257,37 +257,63 @@ window.updateEffects = function(entity, dt) {
     }
 };
 
-// --- 敵の定義と生成 ---
-window.createEnemy = function(options) {
-    const radius = options.radius || 15;
-    const initialPos = window.getSafeRandomPosition(options.spawnX, options.spawnY, 50, radius, options.isFlying);
+// ==========================================
+// ★ 敵データベースと生成ロジックの刷新
+// ==========================================
+window.ENEMY_DB = window.ENEMY_DB || {}; // エリアごとの別ファイルで登録するための大元DB
+
+// レベルとIDを指定して敵の実体を生成する関数
+window.spawnEnemy = function(enemyId, level, spawnX, spawnY) {
+    if (!window.ENEMY_DB || !window.ENEMY_DB[enemyId]) return null;
+    
+    const base = window.ENEMY_DB[enemyId];
+    const lvl = level || 1;
+    
+    // レベル補正 (1レベルにつきステータス+20%)
+    const statMultiplier = 1 + (lvl - 1) * 0.2;
+    const hp = Math.floor((base.baseHp || 50) * statMultiplier);
+    const atk = Math.floor((base.baseAtk || 5) * statMultiplier);
+    const exp = Math.floor((base.baseExp || 20) * statMultiplier);
+
+    const radius = base.radius || 15;
+    const initialPos = window.getSafeRandomPosition(spawnX, spawnY, 50, radius, base.isFlying);
 
     return {
-        id: options.id,
-        spawnX: options.spawnX, spawnY: options.spawnY,
+        uid: Date.now() + Math.random(),
+        id: enemyId,
+        name: base.name || 'Unknown',
+        level: lvl,
+        spawnX: spawnX, spawnY: spawnY,
         x: initialPos.x, y: initialPos.y, targetX: initialPos.x, targetY: initialPos.y,
-        path: [], radius: radius, color: options.color || '#ff0000',
-        hp: options.hp || 50, maxHp: options.maxHp || 50,
-        speed: options.speed !== undefined ? options.speed : 30,
-        isFlying: options.isFlying || false, 
-        baseRespawnTime: options.respawnTime !== undefined ? options.respawnTime : 10, 
-        type: options.type || 'passive', state: 'idle', 
-        roamRadius: options.roamRadius || 250, sightRadius: options.sightRadius || 200, 
-        attackRange: options.attackRange || 40, attackDamage: options.attackDamage || 5, 
-        attackRate: options.attackRate || 1.5, attackCooldown: 0,
+        path: [], radius: radius, color: base.color || '#ff0000',
+        
+        hp: hp, maxHp: hp,
+        armor: base.baseArmor || 0, // バフ等で変動させる防御力枠
+        
+        speed: base.speed !== undefined ? base.speed : 30,
+        isFlying: base.isFlying || false, 
+        baseRespawnTime: base.respawnTime !== undefined ? base.respawnTime : 10, 
+        
+        type: base.type || 'passive', state: 'idle', 
+        roamRadius: base.roamRadius || 250, sightRadius: base.sightRadius || 200, 
+        attackRange: base.attackRange || 40, attackDamage: atk, 
+        attackRate: base.attackRate || 1.5, attackCooldown: 0,
+        
         hasBeenAttacked: false, timers: { roam: Math.random() * 3, respawn: 0, pathCalc: 0 },
         hateTable: {}, damageTable: {}, 
-        expReward: options.expReward || 20,
-        element: options.element || null, elementParams: options.elementParams || {}, resists: options.resists || [], 
-        effects: [], effectCounts: {} 
+        expReward: exp,
+        
+        element: base.element || null, elementParams: base.elementParams || {}, resists: base.resists || [], 
+        effects: [], effectCounts: {},
+        dropTable: base.dropTable || [],
+        
+        // ★別ファイルから独自の行動（スキル等）を注入するフック
+        customUpdate: base.customUpdate || null
     };
 };
 
-window.enemies = [
-    window.createEnemy({ id: 1, spawnX: window.world.width / 2 + 200, spawnY: window.world.height / 2 + 100, type: 'active', color: '#ff4444', speed: 80, attackDamage: 15, expReward: 30, element: 'fire', elementParams: { duration: 3.0, dmgRatio: 0.2 } }), 
-    window.createEnemy({ id: 2, spawnX: window.world.width / 2 - 150, spawnY: window.world.height / 2 + 250, type: 'passive', color: '#4444ff', speed: 60, expReward: 20, element: 'ice', elementParams: { duration: 2.0 } }), 
-    window.createEnemy({ id: 3, spawnX: window.world.width / 2 + 300, spawnY: window.world.height / 2 - 100, type: 'static', color: '#ffff44', speed: 40, attackDamage: 30, expReward: 50 })
-];
+// 現在マップ上に存在する敵の配列 (※生成は後日 MapManager 側で行います)
+window.enemies = [];
 
 // --- 敵の更新（AIロジック） ---
 window.updateEnemies = function(dt) {
@@ -309,24 +335,29 @@ window.updateEnemies = function(dt) {
                 const expGain = Math.ceil(e.expReward * myShare);
                 window.addExp(expGain); 
                 
-                // ★ログ追加: 敵討伐・経験値取得
                 if(typeof window.addLog === 'function' && typeof window.getEntityName === 'function') {
                     window.addLog(`${window.getEntityName(e)} を倒し、<span class='color-exp'>${expGain} EXP</span> を獲得した！`, 'exp');
                 }
             }
             
-            if (Math.random() > 0.3) { 
-                const keys = Object.keys(window.ITEM_DB); 
-                const randomKey = keys[Math.floor(Math.random() * keys.length)]; 
-                const baseItem = window.ITEM_DB[randomKey];
-                window.droppedItems.push({ 
-                    uid: Date.now() + Math.random(), id: baseItem.id, type: baseItem.type, equipSlot: baseItem.equipSlot, 
-                    name: baseItem.name, rarity: baseItem.rarity, color: baseItem.color, desc: baseItem.desc, 
-                    stats: baseItem.stats, resists: baseItem.resists, element: baseItem.element, elementParams: baseItem.elementParams, 
-                    restore: baseItem.restore, maxStack: baseItem.maxStack, count: 1, 
-                    x: e.x, y: e.y, radius: 8, ownerId: ownerId, lifeTime: 0 
+            // ★修正: 確率ドロップテーブルの処理
+            if (e.dropTable && e.dropTable.length > 0 && window.ITEM_DB) {
+                e.dropTable.forEach(drop => {
+                    if (Math.random() <= drop.chance) {
+                        const baseItem = window.ITEM_DB[drop.id];
+                        if (baseItem) {
+                            window.droppedItems.push({ 
+                                uid: Date.now() + Math.random(), id: baseItem.id, type: baseItem.type, equipSlot: baseItem.equipSlot, 
+                                name: baseItem.name, rarity: baseItem.rarity, color: baseItem.color, desc: baseItem.desc, 
+                                stats: baseItem.stats, resists: baseItem.resists, element: baseItem.element, elementParams: baseItem.elementParams, 
+                                restore: baseItem.restore, maxStack: baseItem.maxStack, count: 1, 
+                                x: e.x, y: e.y, radius: 8, ownerId: ownerId, lifeTime: 0 
+                            });
+                        }
+                    }
                 });
             }
+
             if (window.player.targetEnemy === e) { window.player.targetEnemy = null; window.player.isAutoAttacking = false; }
             continue; 
         }
@@ -339,6 +370,10 @@ window.updateEnemies = function(dt) {
                 e.x = safePos.x; e.y = safePos.y; e.targetX = e.x; e.targetY = e.y; 
                 e.hp = e.maxHp; e.state = 'idle'; e.hasBeenAttacked = false; 
                 e.hateTable = {}; e.damageTable = {}; e.path = []; e.effects = []; e.effectCounts = {};
+                // ★自己バフなどの状態も初期化
+                if (window.ENEMY_DB && window.ENEMY_DB[e.id]) {
+                    e.armor = window.ENEMY_DB[e.id].baseArmor || 0;
+                }
             }
             continue; 
         }
@@ -347,7 +382,6 @@ window.updateEnemies = function(dt) {
         let isFrozen = e.effects.some(ef => ef.type === 'ice' && ef.duration > 0);
         let isShocked = e.effects.some(ef => ef.type === 'lightning' && ef.duration > 0);
         
-        // 攻撃後硬直、または凍結状態なら移動不可
         let isMovementBlocked = isFrozen || e.attackCooldown > 0;
 
         if (e.attackCooldown > 0) e.attackCooldown -= dt;
@@ -380,7 +414,6 @@ window.updateEnemies = function(dt) {
                     const actualDamage = Math.max(1, e.attackDamage * (100 / (100 + window.player.armor))); 
                     currentTarget.hp -= actualDamage; 
                     
-                    // ★ログ追加: 敵からの被ダメージ
                     if(typeof window.addLog === 'function' && typeof window.getEntityName === 'function') {
                         window.addLog(`${window.getEntityName(e)} は ${window.getEntityName(currentTarget)} に <span class='color-damage'>${Math.floor(actualDamage)}</span> ダメージを与えた！`, 'damage');
                     }
@@ -444,6 +477,13 @@ window.updateEnemies = function(dt) {
                     if (e.state === 'roam' || e.state === 'return') { e.targetX = e.x; e.targetY = e.y; e.state = 'idle'; } 
                 } 
             } 
+        }
+
+        // =====================================================
+        // ★ エリアごとの個別JSで定義されたボス固有のAIなどを実行するフック
+        // =====================================================
+        if (e.customUpdate && typeof e.customUpdate === 'function') {
+            e.customUpdate(e, dt, window.player);
         }
     }
 };

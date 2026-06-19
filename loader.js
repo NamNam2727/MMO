@@ -15,8 +15,9 @@
         'utils.js',
         'mapManager.js',   
         'entities.js',
-        'inventory_ui.js',     // ★変更: 分割したUIファイル
-        'inventory_action.js', // ★変更: 分割したアクションファイル
+        'enemy/plains.js',     // ★追加: エリア別の敵データ（entitiesより後で読み込む）
+        'inventory_ui.js',     
+        'inventory_action.js', 
         'shortcut.js',     
         'status_ui.js',    
         'chat_system.js',  
@@ -24,7 +25,7 @@
         'skill_create.js', 
         'skill.js',        
         'multiplayer.js',  
-        'renderer.js',     // ★追加: 切り出した描画モジュール
+        'renderer.js',     
         'main.js'          
     ];
 
@@ -69,7 +70,7 @@
 
         // UI関連の初期化を実行
         if (typeof window.initUI === 'function') window.initUI();
-        if (typeof window.initInventoryUI === 'function') window.initInventoryUI(); // ★念のためインベントリ初期化も確実に行う
+        if (typeof window.initInventoryUI === 'function') window.initInventoryUI(); 
         if (typeof window.initSkillCreateUI === 'function') window.initSkillCreateUI();
 
         // メインループの開始

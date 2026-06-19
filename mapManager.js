@@ -23,9 +23,10 @@ window.MapManager = {
             name: 'ワールドマップ',
             scriptUrl: 'maps/world/data.js'
         },
-        'forest': {
-            name: '迷いの森',
-            scriptUrl: 'maps/forest/data.js'
+        // ★修正: forestからplainsに変更し、scriptUrlも合わせました
+        'plains': {
+            name: 'グライム平原',
+            scriptUrl: 'maps/plains/map1.js'
         }
     },
 
@@ -41,7 +42,7 @@ window.MapManager = {
             return;
         }
 
-        // ★追加: マップ移動開始時にローディングフラグを立てる
+        // マップ移動開始時にローディングフラグを立てる
         window.isMapLoading = true;
 
         if (typeof window.addLog === 'function') window.addLog(`<span class='color-sys'>${this.mapList[mapId].name} へ移動中...</span>`, 'sys');
@@ -79,7 +80,7 @@ window.MapManager = {
     },
 
     // =====================================================
-    // ★追加: 背景画像を裏で読み込み、完全に準備できてから切り替えを行う
+    // 背景画像を裏で読み込み、完全に準備できてから切り替えを行う
     // =====================================================
     preloadImageAndSetup: function(mapId, targetEventId) {
         const data = this.mapDataStore[mapId];
@@ -120,7 +121,11 @@ window.MapManager = {
         window.currentEventMap = data.eventMap || [];
         window.currentEvents = data.events || {};
         
-        // ★修正: プリロード完了済みの画像をセット
+        // ★追加: 3層目のNPCマップと定義リストを更新
+        window.currentNpcMap = data.npcMap || [];
+        window.currentNpcEvents = data.npcEvents || {};
+
+        // プリロード完了済みの画像をセット
         window.currentBackgroundImage = loadedImg;
 
         const GRID_SIZE = 32; 
@@ -144,6 +149,40 @@ window.MapManager = {
                             height: GRID_SIZE,
                             color: 'transparent'
                         });
+                    }
+                }
+            }
+        }
+
+        // =====================================================
+        // [C] ★追加: 敵の初期スポーン配置処理
+        // =====================================================
+        window.enemies = []; // 古いマップの敵をクリア
+        
+        if (window.currentNpcMap.length > 0 && Object.keys(window.currentNpcEvents).length > 0) {
+            for (let y = 0; y < window.currentNpcMap.length; y++) {
+                for (let x = 0; x < window.currentNpcMap[y].length; x++) {
+                    const eventId = window.currentNpcMap[y][x];
+                    
+                    if (eventId > 0 && window.currentNpcEvents[eventId]) {
+                        const npcDef = window.currentNpcEvents[eventId];
+                        
+                        if (npcDef.type === 'enemy_spawn' && npcDef.enemyId) {
+                            // スポーン座標をマスの中心点に設定
+                            const spawnX = x * GRID_SIZE + (GRID_SIZE / 2);
+                            const spawnY = y * GRID_SIZE + (GRID_SIZE / 2);
+                            
+                            if (typeof window.spawnEnemy === 'function') {
+                                const enemy = window.spawnEnemy(npcDef.enemyId, npcDef.level || 1, spawnX, spawnY);
+                                if (enemy) {
+                                    // 個別の再出現時間(respawnTime)の上書き設定
+                                    if (npcDef.respawnTime !== undefined) {
+                                        enemy.baseRespawnTime = npcDef.respawnTime;
+                                    }
+                                    window.enemies.push(enemy);
+                                }
+                            }
+                        }
                     }
                 }
             }
