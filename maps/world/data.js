@@ -79,17 +79,17 @@ window.MapManager.mapDataStore['worldMap'] = {
 
     // ==========================================
     // 数字（ID）の意味を定義するリスト
-    // type: 'area_select' とすることで、進入UIを開くように指示します。
     // ==========================================
     events: {
         1: { type: 'area_select', targetMap: 'town', targetId: 2 , name: 'はじまりの街', description: '冒険の拠点となる平和な街。アイテムの整理や装備の準備をしよう。' },
-        2: { type: 'area_select', targetMap: 'forest', targetId: 9, name: '迷いの森', description: 'スライムなどが生息する深い森。初心者のレベル上げに最適。' },
+        // ★修正: targetMap を 'plains' に変更しました
+        2: { type: 'area_select', targetMap: 'plains', targetId: 2, name: 'グライム平原', description: 'グライムが生息する平原。初心者のレベル上げに最適。' },
         3: { type: 'area_select', targetMap: 'area3', targetId: 9, name: '未開放エリア3', description: '現在は進入できません。' },
         4: { type: 'area_select', targetMap: 'area4', targetId: 9, name: '未開放エリア4', description: '現在は進入できません。' },
         5: { type: 'area_select', targetMap: 'area5', targetId: 9, name: '未開放エリア5', description: '現在は進入できません。' },
         6: { type: 'area_select', targetMap: 'area6', targetId: 9, name: '未開放エリア6', description: '現在は進入できません。' },
         
-        // （おまけ）ワールドマップ自体を開いたときの初期視点合わせ用
+        // ワールドマップ自体を開いたときの初期視点合わせ用
         9: { type: 'spawn', isDefaultSpawn: true }
     }
 };
