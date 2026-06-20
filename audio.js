@@ -55,6 +55,11 @@ window.AudioManager = (function() {
         
         // BGMの再生（各マップのbgm.jsモジュールを引数に受け取る）
         playBGM: async function(bgmModule) {
+            // ★追加: 現在再生中のBGMと同じ場合は、再起動せずそのまま流し続ける
+            if (isPlaying && currentBgmObj === bgmModule) {
+                return;
+            }
+
             if (isPlaying) this.stopBGM();
             initAudio();
             
@@ -105,14 +110,20 @@ window.AudioManager = (function() {
             }
             currentBgmObj = null;
             
-            // フェードアウトして停止
-            if (masterGain) {
-                masterGain.gain.setTargetAtTime(0, ctx.currentTime, 0.15);
+            // ★修正: 新しいBGMのmasterGainを消してしまわないよう、古いノードを一時変数に退避させる
+            const oldMasterGain = masterGain;
+            masterGain = null; // システム側の参照はここで切っておく
+            
+            // 古いBGMだけをフェードアウトして停止させる
+            if (oldMasterGain) {
+                try {
+                    oldMasterGain.gain.setTargetAtTime(0, ctx.currentTime, 0.15);
+                } catch(e) {}
+                
                 setTimeout(() => {
-                    if (masterGain) {
-                        masterGain.disconnect();
-                        masterGain = null;
-                    }
+                    try {
+                        oldMasterGain.disconnect();
+                    } catch(e) {}
                 }, 1500); 
             }
         },
