@@ -13,14 +13,10 @@ function updateInputPos(e) {
     input.screenY = e.clientY - rect.top;
 }
 
-// 画面全体でのコンテキストメニュー（右クリック・長押しメニュー）を禁止
 window.addEventListener('contextmenu', (e) => {
     e.preventDefault();
 });
 
-// ==========================================-
-// ★ 画面スクロールのスマート抑制処理
-// ==========================================-
 document.addEventListener('touchmove', function(e) {
     if (window.isDraggingItem) {
         e.preventDefault();
@@ -32,14 +28,12 @@ document.addEventListener('touchmove', function(e) {
     }
 }, { passive: false });
 
-// --- 入力イベント (タップ/長押し) ---
 window.addEventListener('pointerdown', (e) => {
     const itemDetail = document.getElementById('itemDetail');
     const invWindow = document.getElementById('invWindow');
     const statWindow = document.getElementById('statusWindow');
     const areaSelect = document.getElementById('areaSelectWindow');
     
-    // UIの外側をタップした時に閉じる処理
     if (itemDetail && itemDetail.style.display === 'flex' && !itemDetail.contains(e.target) && !e.target.closest('.inv-slot')) {
         itemDetail.style.display = 'none';
     }
@@ -47,7 +41,6 @@ window.addEventListener('pointerdown', (e) => {
         areaSelect.style.display = 'none';
     }
 
-    // UIをタップしている場合は移動やアクションをキャンセル
     if ((invWindow && e.target.closest('#invWindow')) || 
         (itemDetail && e.target.closest('#itemDetail')) || 
         (statWindow && e.target.closest('#statusWindow')) || 
@@ -64,7 +57,10 @@ window.addEventListener('pointerdown', (e) => {
         e.target.tagName === 'INPUT') return;
     
     input.isDown = true; updateInputPos(e); pointerDownTime = performance.now();
-    window.playerPath = []; window.player.isAutoAttacking = false; window.player.targetItem = null; 
+    
+    // ★修正: タップ時にターゲットを一括クリア
+    window.playerPath = []; window.player.isAutoAttacking = false; 
+    window.player.targetItem = null; window.player.targetNpc = null;
 });
 
 window.addEventListener('pointermove', (e) => { 
@@ -72,9 +68,6 @@ window.addEventListener('pointermove', (e) => {
     if (input.isDown) updateInputPos(e); 
 });
 
-// ==========================================
-// ★ 動的UI生成: エリア選択ウィンドウ
-// ==========================================
 window.showAreaSelectUI = function(eventDef) {
     let ui = document.getElementById('areaSelectWindow');
     if (!ui) {
@@ -95,7 +88,6 @@ window.showAreaSelectUI = function(eventDef) {
     
     ui.style.display = 'flex';
     
-    // イベント再登録
     document.getElementById('btnAreaCancel').addEventListener('pointerdown', (e) => {
         e.stopPropagation();
         ui.style.display = 'none';
@@ -116,15 +108,11 @@ function handlePointerUp(e) {
         const currentTime = performance.now();
         if (currentTime - pointerDownTime < 200) {
             
-            // ★ ロード中ならタップ判定を無効化
             if (window.isMapLoading) {
                 input.isDown = false;
                 return;
             }
 
-            // ==========================================
-            // ★ ワールドマップモードのタップ判定
-            // ==========================================
             const isWorldMap = window.MapManager && window.MapManager.currentMapId === 'worldMap';
             
             if (isWorldMap) {
@@ -163,29 +151,49 @@ function handlePointerUp(e) {
                 return; 
             }
 
-            // ==========================================
-            // 通常マップ時のターゲット判定（敵・アイテム）
-            // ==========================================
             const targetX = input.screenX + window.camera.x; 
             const targetY = input.screenY + window.camera.y;
             
-            let clickedEnemy = null;
-            for (const enemy of window.enemies) {
-                if (enemy.state !== 'dead') {
-                    const dist = Math.hypot(enemy.x - targetX, enemy.y - targetY);
-                    if (dist <= enemy.radius + 15) { clickedEnemy = enemy; break; }
+            // ★追加: 1.NPCのタップ判定を最優先で行う
+            let clickedNpc = null;
+            if (window.npcs) {
+                for (const npc of window.npcs) {
+                    const dist = Math.hypot(npc.x - targetX, npc.y - targetY);
+                    if (dist <= npc.radius + 15) { clickedNpc = npc; break; }
                 }
             }
 
+            // 2.敵の判定
+            let clickedEnemy = null;
+            if (!clickedNpc) {
+                for (const enemy of window.enemies) {
+                    if (enemy.state !== 'dead') {
+                        const dist = Math.hypot(enemy.x - targetX, enemy.y - targetY);
+                        if (dist <= enemy.radius + 15) { clickedEnemy = enemy; break; }
+                    }
+                }
+            }
+
+            // 3.アイテムの判定
             let clickedItem = null;
-            if (!clickedEnemy) {
+            if (!clickedNpc && !clickedEnemy) {
                 for (const item of window.droppedItems) {
                     const dist = Math.hypot(item.x - targetX, item.y - targetY);
                     if (dist <= item.radius + 15) { clickedItem = item; break; }
                 }
             }
 
-            if (clickedEnemy) {
+            // ★追加: 各ターゲットごとの動作振り分け
+            if (clickedNpc) {
+                window.player.targetEnemy = null; 
+                window.player.isAutoAttacking = false;
+                window.player.targetItem = null;
+                window.player.targetNpc = clickedNpc; 
+                if(typeof window.findPath === 'function') {
+                    window.playerPath = window.findPath(window.player.x, window.player.y, clickedNpc.x, clickedNpc.y);
+                }
+            } else if (clickedEnemy) {
+                window.player.targetNpc = null;
                 window.player.targetEnemy = clickedEnemy; 
                 window.player.isAutoAttacking = true;
                 window.player.targetItem = null;
@@ -193,6 +201,7 @@ function handlePointerUp(e) {
                     window.playerPath = window.findPath(window.player.x, window.player.y, clickedEnemy.x, clickedEnemy.y);
                 }
             } else if (clickedItem) {
+                window.player.targetNpc = null;
                 if (clickedItem.ownerId === null || clickedItem.ownerId === window.player.id) {
                     window.player.targetEnemy = null; window.player.isAutoAttacking = false;
                     window.player.targetItem = clickedItem;
@@ -206,6 +215,7 @@ function handlePointerUp(e) {
                     }
                 }
             } else {
+                window.player.targetNpc = null;
                 window.player.isAutoAttacking = false; window.player.targetItem = null;
                 if(typeof window.findPath === 'function') {
                     window.playerPath = window.findPath(window.player.x, window.player.y, targetX, targetY);
@@ -220,9 +230,6 @@ window.addEventListener('pointerup', handlePointerUp);
 window.addEventListener('pointercancel', handlePointerUp); 
 window.addEventListener('pointerout', handlePointerUp);
 
-// ==========================================
-// ★ アバター画像の読み込み管理
-// ==========================================
 function loadAvatarImages() {
     if (window.GameState && window.GameState.userInfo) {
         const myUrl = window.GameState.userInfo.portrait || window.GameState.userInfo.portait;
@@ -234,15 +241,11 @@ function loadAvatarImages() {
     }
 }
 
-// ==========================================
-// 更新処理 (Update)
-// ==========================================
-let lastMapId = null; // マップ切り替え検知用
+let lastMapId = null; 
 
 function update(dt, timestamp) {
     loadAvatarImages(); 
 
-    // ★ マップ読み込み中は、ゲーム内の時間進行・操作・戦闘をすべてストップ
     if (window.isMapLoading) {
         if (window.MultiplayerManager) {
             window.MultiplayerManager.update(dt, timestamp);
@@ -250,14 +253,12 @@ function update(dt, timestamp) {
         return; 
     }
 
-    // マップ切り替え時に、不要なUIを隠す/表示する
     const currentMapId = window.MapManager ? window.MapManager.currentMapId : null;
     const isWorldMap = currentMapId === 'worldMap';
     
     if (lastMapId !== currentMapId) {
         lastMapId = currentMapId;
         
-        // ワールドマップ中は一部UIを非表示にする
         const pWidget = document.getElementById('playerWidget');
         if (pWidget) pWidget.style.display = isWorldMap ? 'none' : 'flex';
         
@@ -268,27 +269,22 @@ function update(dt, timestamp) {
         if (lootBtn) lootBtn.style.display = isWorldMap ? 'none' : 'flex';
         
         if (isWorldMap) {
-            // ワールドマップでは移動しないため、移動フラグ等をリセット
             window.camera.x = 0;
             window.camera.y = 0;
             window.playerPath = [];
             window.player.targetEnemy = null;
             window.player.targetItem = null;
+            window.player.targetNpc = null; // ★NPCターゲットも解除
             input.isDown = false;
         }
     }
 
-    // ★ ワールドマップモードの場合、これ以降の移動や戦闘処理はすべてスキップする！
     if (isWorldMap) {
         if (window.MultiplayerManager) {
             window.MultiplayerManager.update(dt, timestamp);
         }
         return; 
     }
-
-    // ----------------------------------------------------
-    // 以下、通常マップ（街や森）の更新処理
-    // ----------------------------------------------------
 
     if (window.MultiplayerManager) {
         window.MultiplayerManager.update(dt, timestamp);
@@ -320,8 +316,35 @@ function update(dt, timestamp) {
     let shouldMove = true;
     if (pIsFrozen) shouldMove = false; 
 
-    // 攻撃処理
-    if (!pIsFrozen && window.player.targetEnemy && window.player.targetEnemy.state !== 'dead' && window.player.isAutoAttacking) {
+    // =========================================================
+    // ★追加: 友好的なNPCへの接近・インタラクト処理
+    // =========================================================
+    if (window.player.targetNpc && !pIsFrozen) {
+        if (window.player.castingSkill) {
+            shouldMove = false; 
+            window.playerPath = [];
+        } else {
+            const npc = window.player.targetNpc;
+            const distToNpc = Math.hypot(npc.x - window.player.x, npc.y - window.player.y);
+            // 敵への攻撃射程と同じ距離で話しかけられるようにする
+            if (distToNpc <= window.player.attackRange + 20) {
+                shouldMove = false; window.playerPath = [];
+                // 接近したらインタラクト関数（お店を開くなど）を実行
+                if (npc.interact && typeof npc.interact === 'function') {
+                    npc.interact(npc, window.player);
+                }
+                // 一度話しかけたらターゲットを解除する（何度も開き直すのを防ぐため）
+                window.player.targetNpc = null;
+            } else {
+                if (window.playerPath.length === 0 && typeof window.findPath === 'function') {
+                    window.playerPath = window.findPath(window.player.x, window.player.y, npc.x, npc.y);
+                }
+            }
+        }
+    }
+
+    // 敵への攻撃処理
+    if (!window.player.targetNpc && !pIsFrozen && window.player.targetEnemy && window.player.targetEnemy.state !== 'dead' && window.player.isAutoAttacking) {
         if (window.player.castingSkill) {
             shouldMove = false; 
             window.playerPath = []; 
@@ -358,7 +381,7 @@ function update(dt, timestamp) {
     }
     
     // アイテム回収処理
-    if (window.player.targetItem && !pIsFrozen) {
+    if (!window.player.targetNpc && window.player.targetItem && !pIsFrozen) {
         if (window.player.castingSkill) {
             shouldMove = false; 
             window.playerPath = [];
@@ -423,7 +446,6 @@ function update(dt, timestamp) {
         }
     }
 
-    // 境界制限・衝突
     window.player.x = Math.max(window.player.radius, Math.min(window.player.x, window.world.width - window.player.radius));
     window.player.y = Math.max(window.player.radius, Math.min(window.player.y, window.world.height - window.player.radius));
 
@@ -442,7 +464,6 @@ function update(dt, timestamp) {
         if (currentDistanceToWaypoint >= initialDistanceToWaypoint - 0.5) window.playerPath.shift();
     }
 
-    // イベントマップの踏み判定 (通常マップでの自動ワープ等)
     if (!window.player.isWarping && window.currentEventMap && window.currentEvents) {
         const gridX = Math.floor(window.player.x / 32);
         const gridY = Math.floor(window.player.y / 32);
@@ -464,7 +485,6 @@ function update(dt, timestamp) {
         }
     }
 
-    // カメラ追従
     const screenX = window.player.x - window.camera.x; const screenY = window.player.y - window.camera.y;
     const centerX = window.camera.width / 2; const centerY = window.camera.height / 2;
     if (screenX < centerX - window.camera.deadZoneX) window.camera.x -= (centerX - window.camera.deadZoneX) - screenX;
@@ -475,9 +495,6 @@ function update(dt, timestamp) {
     window.camera.y = Math.max(0, Math.min(window.camera.y, window.world.height - window.camera.height));
 }
 
-// ==========================================
-// メインループの起動
-// ==========================================
 let lastTime = 0;
 window.gameLoop = function(timestamp) {
     if (!lastTime) lastTime = timestamp;
@@ -487,16 +504,13 @@ window.gameLoop = function(timestamp) {
     
     update(dt, timestamp); 
     
-    // 切り出した描画モジュールを呼び出し
     if (window.GameRenderer) {
         window.GameRenderer.draw();
     }
 
-    // ★追加: マップ読み込み中のオーバーレイ描画
     if (window.isMapLoading && window.ctx && window.canvas) {
         const ctx = window.ctx;
         ctx.save();
-        // 変換マトリクスをリセットして画面全体を覆う
         ctx.setTransform(1, 0, 0, 1, 0, 0); 
         ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
         ctx.fillRect(0, 0, window.canvas.width, window.canvas.height);
@@ -506,7 +520,6 @@ window.gameLoop = function(timestamp) {
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         
-        // フワフワさせるアニメーション
         const bounce = Math.sin(timestamp / 150) * 5;
         ctx.fillText('マップ読み込み中...', window.canvas.width / 2, window.canvas.height / 2 + bounce);
         ctx.restore();
@@ -515,7 +528,6 @@ window.gameLoop = function(timestamp) {
     requestAnimationFrame(window.gameLoop);
 };
 
-// 初期化時の実行処理
 if (typeof window.addLog === 'function') {
     window.addLog("<span class='color-sys'>システム: システムを起動しました。</span>", 'sys'); 
 }
