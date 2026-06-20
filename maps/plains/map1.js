@@ -194,7 +194,7 @@ window.MapManager.mapDataStore['plains'] = {
     events: {
         1: { type: 'warp', targetMap: 'worldMap', targetId: 2, icon: '⤴️' },       // ワールドマップへ移動
         2: { type: 'spawn', isDefaultSpawn: true },                                  // ワールドマップから入った時の着地点
-        3: { type: 'warp', targetMap: 'plains_map2', targetId: 4, icon: '⬇️' },    // 次のマップへ移動
+        3: { type: 'warp', targetMap: 'plains_map2', targetId: 2, icon: '⬇️' },    // 次のマップへ移動
         4: { type: 'spawn' }                                                         // 次のマップから戻ってきた時の着地点
     },
 
