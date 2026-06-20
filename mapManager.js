@@ -23,10 +23,14 @@ window.MapManager = {
             name: 'ワールドマップ',
             scriptUrl: 'maps/world/data.js'
         },
-        // ★修正: forestからplainsに変更し、scriptUrlも合わせました
         'plains': {
             name: 'グライム平原',
             scriptUrl: 'maps/plains/map1.js'
+        },
+        // ★追加: グライム平原 その2 を目次に追加
+        'plains_map2': {
+            name: 'グライム平原 その2',
+            scriptUrl: 'maps/plains/map2.js'
         }
     },
 
@@ -121,7 +125,7 @@ window.MapManager = {
         window.currentEventMap = data.eventMap || [];
         window.currentEvents = data.events || {};
         
-        // ★追加: 3層目のNPCマップと定義リストを更新
+        // 3層目のNPCマップと定義リストを更新
         window.currentNpcMap = data.npcMap || [];
         window.currentNpcEvents = data.npcEvents || {};
 
@@ -155,7 +159,7 @@ window.MapManager = {
         }
 
         // =====================================================
-        // [C] ★追加: 敵の初期スポーン配置処理
+        // [C] 敵の初期スポーン配置処理
         // =====================================================
         window.enemies = []; // 古いマップの敵をクリア
         
@@ -264,7 +268,7 @@ window.MapManager = {
             }
         }
 
-        // ★追加: 構築完了後にローディングフラグを下ろす
+        // 構築完了後にローディングフラグを下ろす
         window.isMapLoading = false;
     }
 };
