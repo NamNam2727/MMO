@@ -15,9 +15,11 @@
         'utils.js',
         'mapManager.js',   
         'entities.js',
-        'enemy/plains.js',     // ★追加: エリア別の敵データ（entitiesより後で読み込む）
+        'enemy/plains.js',
+        'maps/town/npc1.js',   // ★追加: 街のNPCデータ
         'inventory_ui.js',     
         'inventory_action.js', 
+        'shop_ui.js',          // ★追加: 次回作成するショップUI
         'shortcut.js',     
         'status_ui.js',    
         'chat_system.js',  
@@ -44,7 +46,8 @@
         
         script.onerror = () => {
             console.error(`Failed to load: ${src}`);
-            alert(`スクリプトの読み込みに失敗しました: ${src}`);
+            // ※開発中はアラートを出すと止まる場合があるのでコンソールエラーのみにしておくのが無難です
+            // alert(`スクリプトの読み込みに失敗しました: ${src}`);
         };
 
         document.head.appendChild(script);
@@ -72,6 +75,7 @@
         if (typeof window.initUI === 'function') window.initUI();
         if (typeof window.initInventoryUI === 'function') window.initInventoryUI(); 
         if (typeof window.initSkillCreateUI === 'function') window.initSkillCreateUI();
+        if (typeof window.initShopUI === 'function') window.initShopUI(); // ★追加: ショップUI初期化
 
         // メインループの開始
         requestAnimationFrame(window.gameLoop);

@@ -13,52 +13,53 @@ window.RARITY = {
 };
 
 // アイテムマスターデータ
+// ★追加: 各アイテムに購入価格(price)を設定。売却額は自動的にこの10分の1になります。
 window.ITEM_DB = {
     // --- 武器 ---
     'sword_wood': { 
         id: 'sword_wood', type: 'equip', equipSlot: 'weapon', name: '木の剣', 
-        rarity: 'Common', maxStack: 1, color: '#8b4513', desc: '粗末な木の剣。', stats: { atk: 5 } 
+        rarity: 'Common', maxStack: 1, color: '#8b4513', desc: '粗末な木の剣。', stats: { atk: 5 }, price: 100 
     },
     'sword_fire': { 
         id: 'sword_fire', type: 'equip', equipSlot: 'weapon', name: '火の剣', 
         rarity: 'Rare', maxStack: 1, color: '#ff4444', desc: '炎を纏った剣。敵を炎上させる。', 
-        stats: { atk: 10 }, element: 'fire', elementParams: { duration: 3.0, dmgRatio: 0.2 } 
+        stats: { atk: 10 }, element: 'fire', elementParams: { duration: 3.0, dmgRatio: 0.2 }, price: 2000 
     },
     'sword_ice': { 
         id: 'sword_ice', type: 'equip', equipSlot: 'weapon', name: '氷の剣', 
         rarity: 'Rare', maxStack: 1, color: '#4444ff', desc: '冷気を放つ剣。敵を凍結させる。', 
-        stats: { atk: 10 }, element: 'ice', elementParams: { duration: 2.0 } 
+        stats: { atk: 10 }, element: 'ice', elementParams: { duration: 2.0 }, price: 2000 
     },
     'sword_lightning': { 
         id: 'sword_lightning', type: 'equip', equipSlot: 'weapon', name: '雷の剣', 
         rarity: 'Rare', maxStack: 1, color: '#ffff44', desc: '稲妻を帯びた剣。敵を感電させる。', 
-        stats: { atk: 10 }, element: 'lightning', elementParams: { duration: 3.0 } 
+        stats: { atk: 10 }, element: 'lightning', elementParams: { duration: 3.0 }, price: 2000 
     },
     'bow_wind': { 
         id: 'bow_wind', type: 'equip', equipSlot: 'weapon', name: '風の弓', 
         rarity: 'Rare', maxStack: 1, color: '#44ff44', desc: '疾風の弓。遠くから敵を吹き飛ばす。', 
-        stats: { atk: 10, attackRange: 250 }, element: 'wind', elementParams: { duration: 0.5, distance: 30 } 
+        stats: { atk: 10, attackRange: 250 }, element: 'wind', elementParams: { duration: 0.5, distance: 30 }, price: 2000 
     },
 
     // --- 防具 ---
     'armor_leather': { 
         id: 'armor_leather', type: 'equip', equipSlot: 'armor', name: '革の鎧', 
-        rarity: 'Uncommon', maxStack: 1, color: '#a0522d', desc: '少し丈夫な鎧。', stats: { armor: 10 } 
+        rarity: 'Uncommon', maxStack: 1, color: '#a0522d', desc: '少し丈夫な鎧。', stats: { armor: 10 }, price: 200 
     },
     'armor_iron': { 
         id: 'armor_iron', type: 'equip', equipSlot: 'armor', name: '鉄の鎧', 
         rarity: 'Rare', maxStack: 1, color: '#aaaaaa', desc: '硬い鉄の鎧。火属性耐性。', 
-        stats: { armor: 50 }, resists: ['fire'] 
+        stats: { armor: 50 }, resists: ['fire'], price: 1500 
     },
 
     // --- 消費・素材 ---
     'potion_small': { 
         id: 'potion_small', type: 'consume', name: '小型ポーション', 
-        rarity: 'Common', maxStack: 99, color: '#00ff00', desc: 'HPを30回復する。', restore: 30 
+        rarity: 'Common', maxStack: 99, color: '#00ff00', desc: 'HPを30回復する。', restore: 30, price: 50 
     },
     'slime_jelly': { 
         id: 'slime_jelly', type: 'etc', name: 'スライムの粘液', 
-        rarity: 'Common', maxStack: 99, color: '#00aaaa', desc: 'ベタベタする素材。' 
+        rarity: 'Common', maxStack: 99, color: '#00aaaa', desc: 'ベタベタする素材。', price: 10 
     },
 
     // ==========================================
@@ -67,37 +68,37 @@ window.ITEM_DB = {
     'chip_enemy_single_str': { 
         id: 'chip_enemy_single_str', type: 'consume', name: '単体チップ(ちから)', 
         rarity: 'Epic', maxStack: 99, color: '#aa5500', desc: 'ちから依存/敵単体\n(最大容量: 20)', 
-        chipData: { capacity: 20, dependency: 'str', targetType: 'enemy', areaType: 'single' } 
+        chipData: { capacity: 20, dependency: 'str', targetType: 'enemy', areaType: 'single' }, price: 1000 
     },
     'chip_enemy_single_int': { 
         id: 'chip_enemy_single_int', type: 'consume', name: '単体チップ(まりょく)', 
         rarity: 'Epic', maxStack: 99, color: '#5500aa', desc: 'まりょく依存/敵単体\n(最大容量: 20)', 
-        chipData: { capacity: 20, dependency: 'int', targetType: 'enemy', areaType: 'single' } 
+        chipData: { capacity: 20, dependency: 'int', targetType: 'enemy', areaType: 'single' }, price: 1000 
     },
     'chip_enemy_circle_str': { 
         id: 'chip_enemy_circle_str', type: 'consume', name: '円範囲チップ(ちから)', 
         rarity: 'Epic', maxStack: 99, color: '#cc6600', desc: 'ちから依存/敵円範囲\n(最大容量: 30)', 
-        chipData: { capacity: 30, dependency: 'str', targetType: 'enemy', areaType: 'circle' } 
+        chipData: { capacity: 30, dependency: 'str', targetType: 'enemy', areaType: 'circle' }, price: 1500 
     },
     'chip_enemy_circle_int': { 
         id: 'chip_enemy_circle_int', type: 'consume', name: '円範囲チップ(まりょく)', 
         rarity: 'Epic', maxStack: 99, color: '#6600cc', desc: 'まりょく依存/敵円範囲\n(最大容量: 30)', 
-        chipData: { capacity: 30, dependency: 'int', targetType: 'enemy', areaType: 'circle' } 
+        chipData: { capacity: 30, dependency: 'int', targetType: 'enemy', areaType: 'circle' }, price: 1500 
     },
     'chip_self_str': { 
         id: 'chip_self_str', type: 'consume', name: '自身チップ(ちから)', 
         rarity: 'Epic', maxStack: 99, color: '#aa8800', desc: 'ちから依存/自身対象\n(最大容量: 20)', 
-        chipData: { capacity: 20, dependency: 'str', targetType: 'self', areaType: 'single' } 
+        chipData: { capacity: 20, dependency: 'str', targetType: 'self', areaType: 'single' }, price: 1000 
     },
     'chip_ally_single_int': { 
         id: 'chip_ally_single_int', type: 'consume', name: '味方単体チップ(まりょく)', 
         rarity: 'Epic', maxStack: 99, color: '#00aa55', desc: 'まりょく依存/味方単体\n(最大容量: 20)', 
-        chipData: { capacity: 20, dependency: 'int', targetType: 'ally', areaType: 'single' } 
+        chipData: { capacity: 20, dependency: 'int', targetType: 'ally', areaType: 'single' }, price: 1000 
     },
     'chip_ally_circle_int': { 
         id: 'chip_ally_circle_int', type: 'consume', name: '味方円範囲チップ(まりょく)', 
         rarity: 'Epic', maxStack: 99, color: '#00cc66', desc: 'まりょく依存/味方円範囲\n(最大容量: 30)', 
-        chipData: { capacity: 30, dependency: 'int', targetType: 'ally', areaType: 'circle' } 
+        chipData: { capacity: 30, dependency: 'int', targetType: 'ally', areaType: 'circle' }, price: 1500 
     },
     
     // ==========================================
@@ -105,29 +106,29 @@ window.ITEM_DB = {
     // ==========================================
     'etc_atk_up': { 
         id: 'etc_atk_up', type: 'etc', name: '素材:攻撃倍率+10%', rarity: 'Common', maxStack: 99, color: '#ffaaaa', 
-        materialData: { cost: 2, effects: [{type: 'atk_up', value: 10}] } 
+        materialData: { cost: 2, effects: [{type: 'atk_up', value: 10}] }, price: 200 
     },
     'etc_range_up': { 
         id: 'etc_range_up', type: 'etc', name: '素材:スキル射程延長', rarity: 'Common', maxStack: 99, color: '#aaffaa', 
-        materialData: { cost: 2, effects: [{type: 'range_up', value: 5}] } 
+        materialData: { cost: 2, effects: [{type: 'range_up', value: 5}] }, price: 200 
     },
     'etc_area_up': { 
         id: 'etc_area_up', type: 'etc', name: '素材:スキル範囲拡張', rarity: 'Uncommon', maxStack: 99, color: '#ffaaff', 
-        materialData: { cost: 4, effects: [{type: 'area_up', value: 5}] } 
+        materialData: { cost: 4, effects: [{type: 'area_up', value: 5}] }, price: 400 
     },
     'etc_heal': { 
         id: 'etc_heal', type: 'etc', name: '素材:回復30%', rarity: 'Rare', maxStack: 99, color: '#aaffff', 
-        materialData: { cost: 6, dependency: 'int', effects: [{type: 'heal', value: 30}] } 
+        materialData: { cost: 6, dependency: 'int', effects: [{type: 'heal', value: 30}] }, price: 600 
     },
     'etc_ice': { 
         id: 'etc_ice', type: 'etc', name: '素材:氷属性', rarity: 'Rare', maxStack: 99, color: '#aaaaff', 
-        materialData: { cost: 4, effects: [{type: 'ice', value: 1}] } 
+        materialData: { cost: 4, effects: [{type: 'ice', value: 1}] }, price: 500 
     },
 
-    // ★追加: グライムゼリー
+    // グライムゼリー
     'grime_jelly': { 
         id: 'grime_jelly', type: 'etc', name: 'グライムゼリー', rarity: 'Common', maxStack: 99, color: '#33ccff', 
-        materialData: { cost: 1, dependency: 'int', effects: [{type: 'heal', value: 5}] } 
+        materialData: { cost: 1, dependency: 'int', effects: [{type: 'heal', value: 5}] }, price: 30 
     }
 };
 

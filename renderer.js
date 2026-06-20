@@ -5,8 +5,6 @@
 
 window.GameRenderer = (function() {
     
-    // --- 内部ヘルパー関数 ---
-
     function drawStatusIcons(entity, ctx) {
         if (!entity.effects || entity.effects.length === 0) return;
         const icons = { 'fire':'🔥', 'ice':'🧊', 'lightning':'⚡️', 'wind':'🌪️' };
@@ -137,7 +135,6 @@ window.GameRenderer = (function() {
         ctx.restore();
     }
 
-    // イベントアイコン（ワープや街の目印）を描画する処理
     function drawEventIcons(ctx, isWorldMap) {
         if (!window.currentEventMap || !window.currentEvents) return;
         
@@ -145,7 +142,6 @@ window.GameRenderer = (function() {
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         
-        // アイコンをフワフワ上下に動かすアニメーション
         const bounce = Math.sin(performance.now() / 200) * 5;
 
         const gridRows = window.currentEventMap.length;
@@ -160,7 +156,6 @@ window.GameRenderer = (function() {
         let cellW = 32;
         let cellH = 32;
 
-        // ワールドマップの場合は、計算された実際の画像領域にグリッドを合わせる
         if (isWorldMap && window.worldMapRect) {
             startX = window.worldMapRect.x;
             startY = window.worldMapRect.y;
@@ -168,7 +163,6 @@ window.GameRenderer = (function() {
             cellH = window.worldMapRect.h / gridRows;
         }
 
-        // フォントサイズの自動調整
         const fontSize = isWorldMap ? Math.min(cellW, cellH) * 0.7 : 24;
         ctx.font = `${fontSize}px sans-serif`;
 
@@ -180,19 +174,16 @@ window.GameRenderer = (function() {
                     const eventDef = window.currentEvents[eventId];
                     let icon = eventDef.icon;
 
-                    // 指定がない場合のデフォルトの目印
                     if (!icon) {
                         if (isWorldMap && eventDef.type === 'area_select') icon = '📍';
                         else if (!isWorldMap && eventDef.type === 'warp') icon = '✨';
                     }
 
-                    // 目印を描画
                     if (icon) {
                         const drawX = startX + x * cellW + cellW / 2;
                         let drawY = startY + y * cellH + cellH / 2;
                         drawY += bounce;
                         
-                        // 視認性を上げるために薄い黒い影（座布団）を敷く
                         ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
                         ctx.beginPath();
                         ctx.arc(drawX, drawY + (fontSize * 0.1), fontSize * 0.6, 0, Math.PI * 2);
@@ -206,7 +197,6 @@ window.GameRenderer = (function() {
         ctx.restore();
     }
 
-    // --- 公開する描画メイン処理 ---
     return {
         draw: function() {
             if(!window.ctx) return;
@@ -216,9 +206,6 @@ window.GameRenderer = (function() {
             ctx.clearRect(0, 0, window.canvas.width, window.canvas.height);
             ctx.save(); 
             
-            // ====================================================
-            // ★ ワールドマップモードの描画 (全画面アスペクト比維持)
-            // ====================================================
             if (isWorldMap) {
                 let drawX = 0, drawY = 0, drawW = window.camera.width, drawH = window.camera.height;
 
@@ -229,7 +216,6 @@ window.GameRenderer = (function() {
                     const imgW = img.naturalWidth;
                     const imgH = img.naturalHeight;
                     
-                    // 画面に収まる最大サイズ（contain: アスペクト比を維持）
                     const scale = Math.min(canvasW / imgW, canvasH / imgH);
                     drawW = imgW * scale;
                     drawH = imgH * scale;
@@ -242,21 +228,15 @@ window.GameRenderer = (function() {
                     ctx.fillRect(0, 0, window.camera.width, window.camera.height);
                 }
 
-                // グリッド計算やタップ判定のために描画した矩形領域を保存しておく
                 window.worldMapRect = { x: drawX, y: drawY, w: drawW, h: drawH };
 
-                // アイコンを描画
                 drawEventIcons(ctx, true);
                 ctx.restore();
                 return; 
             }
 
-            // ====================================================
-            // 以下、通常マップ（街や森）の描画処理
-            // ====================================================
             ctx.translate(-window.camera.x, -window.camera.y);
 
-            // 1. 背景の描画
             if (window.currentBackgroundImage && window.currentBackgroundImage.complete) {
                 ctx.drawImage(window.currentBackgroundImage, 0, 0, window.world.width, window.world.height);
             } else {
@@ -273,7 +253,6 @@ window.GameRenderer = (function() {
 
             ctx.strokeStyle = '#ff0000'; ctx.lineWidth = 4; ctx.strokeRect(0, 0, window.world.width, window.world.height);
 
-            // 通常マップのイベントアイコン（ワープ等）を描画
             drawEventIcons(ctx, false);
 
             for (const item of window.droppedItems) {
@@ -293,6 +272,47 @@ window.GameRenderer = (function() {
                 }
             }
 
+            // ==========================================
+            // ★追加: 友好的なNPCの描画処理
+            // ==========================================
+            if (window.npcs) {
+                for (const npc of window.npcs) {
+                    // タップされている時のハイライト（緑色）
+                    if (window.player.targetNpc === npc) {
+                        ctx.beginPath(); ctx.ellipse(npc.x, npc.y + npc.radius, npc.radius * 1.5, npc.radius * 0.5, 0, 0, Math.PI * 2);
+                        ctx.strokeStyle = '#00ff00'; ctx.lineWidth = 2; ctx.stroke();
+                        ctx.fillStyle = 'rgba(0, 255, 0, 0.2)'; ctx.fill();
+                    }
+
+                    if (npc.image && npc.image.complete && npc.image.naturalWidth > 0) {
+                        ctx.save();
+                        ctx.imageSmoothingEnabled = true;
+                        ctx.imageSmoothingQuality = 'high';
+                        ctx.drawImage(npc.image, npc.x - npc.radius, npc.y - npc.radius, npc.radius * 2, npc.radius * 2);
+                        ctx.restore();
+                    } else {
+                        ctx.beginPath(); ctx.arc(npc.x, npc.y, npc.radius, 0, Math.PI * 2);
+                        ctx.fillStyle = npc.color; ctx.fill();
+                        ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke();
+                    }
+
+                    // NPCの名前表示 (緑色)
+                    ctx.font = 'bold 12px sans-serif';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'top';
+                    ctx.lineWidth = 2;
+                    ctx.strokeStyle = '#000';
+                    ctx.strokeText(npc.name, npc.x, npc.y + npc.radius + 4);
+                    ctx.fillStyle = '#aaffaa';
+                    ctx.fillText(npc.name, npc.x, npc.y + npc.radius + 4);
+
+                    // 会話可能アイコンのフワフワアニメーション
+                    const bounce = Math.sin(performance.now() / 200) * 3;
+                    ctx.font = '16px sans-serif';
+                    ctx.fillText('💬', npc.x, npc.y - npc.radius - 20 + bounce);
+                }
+            }
+
             for (const enemy of window.enemies) {
                 if (enemy.state === 'dead') continue; 
                 
@@ -304,7 +324,6 @@ window.GameRenderer = (function() {
                     if (window.player.isAutoAttacking && !eIsFrozen) { ctx.fillStyle = 'rgba(255, 0, 0, 0.2)'; ctx.fill(); }
                 }
 
-                // 敵の画像が設定されていれば描画、なければデフォルトの丸を描画
                 if (enemy.image && enemy.image.complete && enemy.image.naturalWidth > 0) {
                     ctx.save();
                     ctx.imageSmoothingEnabled = true;
@@ -323,35 +342,28 @@ window.GameRenderer = (function() {
                     ctx.fillStyle = 'red'; ctx.font = 'bold 16px sans-serif'; ctx.fillText('!', enemy.x - 5, enemy.y - enemy.radius - 20);
                 }
 
-                // ==========================================
-                // ★追加: 敵の名前表示とレベル差による色変更
-                // ==========================================
                 const diff = enemy.level - window.player.level;
-                let nameColor = '#ffffff'; // 白 (±1)
+                let nameColor = '#ffffff'; 
                 
-                if (diff <= -11) nameColor = '#4444ff';        // 青 (-11以下)
-                else if (diff <= -6) nameColor = '#00ffff';    // 水色 (-6 〜 -10)
-                else if (diff <= -2) nameColor = '#00ff00';    // 緑 (-2 〜 -5)
-                else if (diff <= 1) nameColor = '#ffffff';     // 白 (-1, 0, +1)
-                else if (diff <= 5) nameColor = '#ffa500';     // 橙色 (+2 〜 +5)
-                else if (diff <= 10) nameColor = '#ff4444';    // 赤 (+6 〜 +10)
-                else nameColor = '#ff00ff';                    // 赤紫色 (+11以上)
+                if (diff <= -11) nameColor = '#4444ff';        
+                else if (diff <= -6) nameColor = '#00ffff';    
+                else if (diff <= -2) nameColor = '#00ff00';    
+                else if (diff <= 1) nameColor = '#ffffff';     
+                else if (diff <= 5) nameColor = '#ffa500';     
+                else if (diff <= 10) nameColor = '#ff4444';    
+                else nameColor = '#ff00ff';                    
 
                 ctx.font = 'bold 11px sans-serif';
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'top';
                 ctx.lineWidth = 2;
-                ctx.strokeStyle = '#000'; // 黒いフチドリで読みやすくする
+                ctx.strokeStyle = '#000'; 
                 const nameText = `Lv${enemy.level} ${enemy.name}`;
                 
-                // 画像の下（半径の少し下）に表示
                 ctx.strokeText(nameText, enemy.x, enemy.y + enemy.radius + 4);
                 ctx.fillStyle = nameColor;
                 ctx.fillText(nameText, enemy.x, enemy.y + enemy.radius + 4);
 
-                // ==========================================
-                // ★変更: HPがMAXの時はHPバーを非表示にする
-                // ==========================================
                 if (enemy.hp < enemy.maxHp) {
                     const hpWidth = 40; const hpHeight = 5; const hpRatio = enemy.hp / enemy.maxHp;
                     ctx.fillStyle = 'black'; ctx.fillRect(enemy.x - hpWidth / 2, enemy.y - enemy.radius - 15, hpWidth, hpHeight);
@@ -364,12 +376,12 @@ window.GameRenderer = (function() {
             if (window.playerPath.length > 0 && !pIsFrozen) {
                 ctx.beginPath(); ctx.moveTo(window.player.x, window.player.y);
                 for (const wp of window.playerPath) ctx.lineTo(wp.x, wp.y);
-                if (window.player.targetItem) { ctx.strokeStyle = 'rgba(0, 255, 0, 0.4)'; } 
+                if (window.player.targetItem || window.player.targetNpc) { ctx.strokeStyle = 'rgba(0, 255, 0, 0.4)'; } 
                 else { ctx.strokeStyle = window.player.isAutoAttacking ? 'rgba(255, 100, 100, 0.4)' : 'rgba(0, 255, 255, 0.4)'; }
                 ctx.lineWidth = 2; ctx.setLineDash([5, 5]); ctx.stroke(); ctx.setLineDash([]);
                 const lastWp = window.playerPath[window.playerPath.length - 1];
                 ctx.beginPath(); ctx.arc(lastWp.x, lastWp.y, 5, 0, Math.PI * 2); 
-                if (window.player.targetItem) ctx.fillStyle = 'rgba(0, 255, 0, 0.6)';
+                if (window.player.targetItem || window.player.targetNpc) ctx.fillStyle = 'rgba(0, 255, 0, 0.6)';
                 else ctx.fillStyle = window.player.isAutoAttacking ? 'rgba(255, 100, 100, 0.6)' : 'rgba(0, 255, 255, 0.6)'; 
                 ctx.fill();
             } else if (input.isDown && !pIsFrozen) {

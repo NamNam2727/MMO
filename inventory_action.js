@@ -34,551 +34,226 @@ window.initInventoryUI = function() {
         let dragOffsetY = 0;
         
         invTitleBar.addEventListener('pointerdown', (e) => {
-            if(e.target.id === 'invCloseBtn') return;
-            isDraggingInv = true; 
+            isDraggingInv = true;
             const rect = window.invWindow.getBoundingClientRect();
-            dragOffsetX = e.clientX - rect.left; 
-            dragOffsetY = e.clientY - rect.top; 
+            dragOffsetX = e.clientX - rect.left;
+            dragOffsetY = e.clientY - rect.top;
+            
+            window.invWindow.style.transform = 'none'; 
+            window.invWindow.style.left = rect.left + 'px';
+            window.invWindow.style.top = rect.top + 'px';
+            
             e.stopPropagation();
         });
-        
+
         window.addEventListener('pointermove', (e) => {
-            if (isDraggingInv) { 
-                window.invWindow.style.left = `${e.clientX - dragOffsetX}px`; 
-                window.invWindow.style.top = `${e.clientY - dragOffsetY}px`; 
-            }
-        });
-        
-        window.addEventListener('pointerup', () => { isDraggingInv = false; });
-
-        // --- タブ切り替え（タップ＆ドラッグ対応） ---
-        let isDraggingTab = false;
-        invTabs.addEventListener('pointerdown', (e) => { 
-            isDraggingTab = true; 
-            handleTabDrag(e); 
-            e.stopPropagation(); 
-        });
-        window.addEventListener('pointermove', (e) => { 
-            if (isDraggingTab) handleTabDrag(e); 
-        });
-        window.addEventListener('pointerup', () => { isDraggingTab = false; });
-        window.addEventListener('pointercancel', () => { isDraggingTab = false; });
-
-        function handleTabDrag(e) {
-            const elem = document.elementFromPoint(e.clientX, e.clientY);
-            if (elem && elem.classList.contains('inv-tab')) {
-                const tabName = elem.getAttribute('data-tab');
-                const idx = window.tabsList.indexOf(tabName);
-                if (idx !== -1 && typeof window.switchTab === 'function') window.switchTab(idx);
-            }
-        }
-
-        // --- 画面スワイプによるタブ切り替え ---
-        let contentStartX = 0; 
-        let contentStartY = 0; 
-        let isContentSwiping = false;
-        
-        invContent.addEventListener('pointerdown', (e) => { 
-            contentStartX = e.clientX; 
-            contentStartY = e.clientY; 
-            isContentSwiping = true; 
-        });
-        
-        invContent.addEventListener('pointerup', (e) => {
-            if (!isContentSwiping) return;
-            isContentSwiping = false;
-            let dx = e.clientX - contentStartX; 
-            let dy = e.clientY - contentStartY;
-            if (Math.abs(dx) > 30 && Math.abs(dx) > Math.abs(dy)) {
-                if (dx < 0 && typeof window.switchTab === 'function') window.switchTab(window.currentTabIndex + 1); 
-                else if(typeof window.switchTab === 'function') window.switchTab(window.currentTabIndex - 1);        
-            }
-        });
-        
-        invContent.addEventListener('pointercancel', () => { isContentSwiping = false; });
-
-        // --- 詳細ウィンドウの操作 ---
-        document.getElementById('btnDetailClose').addEventListener('pointerdown', (e) => {
-            e.stopPropagation(); 
-            itemDetail.style.display = 'none';
-        });
-
-        document.getElementById('btnUseEquip').addEventListener('pointerdown', (e) => {
-            const btnUseEquip = document.getElementById('btnUseEquip');
-            
-            if (btnUseEquip.dataset.isChip === "true") {
-                e.stopPropagation();
-                e.stopImmediatePropagation();
-                e.preventDefault();
-                
-                document.getElementById('itemDetail').style.display = 'none';
-                if (!window.player) return;
-                const tabData = window.player.inventory[window.tabsList[window.currentTabIndex]];
-                if (!tabData) return;
-                const item = tabData.items[window.selectedItemIndex];
-                if (item && typeof window.openSkillCreateWindow === 'function') {
-                    window.openSkillCreateWindow(item);
-                }
+            if (isDraggingInv) {
+                window.invWindow.style.left = (e.clientX - dragOffsetX) + 'px';
+                window.invWindow.style.top = (e.clientY - dragOffsetY) + 'px';
                 return;
             }
 
-            if (btnUseEquip.dataset.isSkill === "true") {
-                e.stopPropagation();
-                e.stopImmediatePropagation();
-                e.preventDefault();
-                
-                document.getElementById('itemDetail').style.display = 'none';
-                if (!window.player) return;
-                const tabData = window.player.inventory[window.tabsList[window.currentTabIndex]];
-                if (!tabData) return;
-                const item = tabData.items[window.selectedItemIndex];
-                if (item && typeof window.prepareSkill === 'function') {
-                    window.prepareSkill(item);
+            if (window.isDraggingItem) {
+                window.lastDragX = e.clientX; 
+                window.lastDragY = e.clientY;
+                const dragGhost = document.getElementById('dragGhost');
+                if (dragGhost) {
+                    dragGhost.style.left = (e.clientX - 22) + 'px';
+                    dragGhost.style.top = (e.clientY - 22) + 'px';
                 }
+                
+                // ドラッグ中の自動スクロール判定
+                if (window.invWindow && window.invWindow.style.display === 'flex') {
+                    window.checkAutoScroll(e.clientY);
+                }
+            }
+        });
+
+        window.addEventListener('pointerup', (e) => {
+            if (isDraggingInv) {
+                isDraggingInv = false;
                 return;
             }
-
-            e.stopPropagation();
-            if (!window.player) return;
-            const currentTabName = window.tabsList[window.currentTabIndex];
-            const tabData = window.player.inventory[currentTabName];
-            if (!tabData) return;
-            const item = tabData.items[window.selectedItemIndex];
-            if (!item) return;
-
-            if (item.type === 'consume') {
-                if (window.itemCooldowns && window.itemCooldowns[item.id] > 0) {
-                    if (typeof window.addLog === 'function') window.addLog(`<span class='color-sys'>まだ使用できません。</span>`, 'sys');
-                    return;
-                }
-                if (item.restore) {
-                    window.player.hp = Math.min(window.player.maxHp, window.player.hp + item.restore);
-                }
-                if (typeof window.updateWidgetUI === 'function') window.updateWidgetUI();
-                
-                window.itemCooldowns[item.id] = 3.0;
-
-                item.count--;
-                if (item.count <= 0) { 
-                    tabData.items.splice(window.selectedItemIndex, 1); 
-                    window.selectedItemIndex = -1; 
-                }
-            } else if (item.type === 'equip') {
-                if (item.isEquipped) {
-                    item.isEquipped = false; 
-                    window.player.equipped[item.equipSlot] = null;
-                } else {
-                    tabData.items.forEach(i => { if (i.equipSlot === item.equipSlot) i.isEquipped = false; });
-                    item.isEquipped = true; 
-                    window.player.equipped[item.equipSlot] = item;
-                }
-                if (typeof window.updatePlayerStats === 'function') window.updatePlayerStats(); 
-            }
-            itemDetail.style.display = 'none'; 
-            if(typeof window.renderInventory === 'function') window.renderInventory();
-        });
-
-        document.getElementById('btnDrop').addEventListener('pointerdown', (e) => {
-            e.stopPropagation();
-            if(itemDetail) itemDetail.style.display = 'none';
-            if (!window.player) return;
-
-            const currentTabName = window.tabsList[window.currentTabIndex];
-            const tabData = window.player.inventory[currentTabName];
-            if (!tabData) return;
-            const item = tabData.items[window.selectedItemIndex];
-            if (!item) return;
-
-            if (item.count > 1) {
-                window.showDropDialog(item, tabData, window.selectedItemIndex);
-            } else {
-                window.showConfirmDropDialog(item, tabData, window.selectedItemIndex);
-            }
-        });
-
-        // --- インベントリ用 グローバル D&Dイベント ---
-        if (!window.__invDndEventsRegistered) {
-            window.__invDndEventsRegistered = true;
             
-            const updateInvGhostPos = (x, y) => {
-                window.lastDragX = x; 
-                window.lastDragY = y;
-                const gh = document.getElementById('invDragGhost');
-                if(gh) { 
-                    gh.style.left = x + 'px'; 
-                    gh.style.top = y + 'px'; 
-                }
-                window.checkAutoScroll(y);
-            };
-
-            window.addEventListener('pointermove', (e) => {
-                if (window.isDraggingItem) { 
-                    e.preventDefault(); 
-                    updateInvGhostPos(e.clientX, e.clientY); 
-                }
-            }, { passive: false });
-
-            window.addEventListener('touchmove', (e) => {
-                if (e.touches && e.touches.length > 0) {
-                    if (window.isDraggingItem) { 
-                        e.preventDefault(); 
-                        updateInvGhostPos(e.touches[0].clientX, e.touches[0].clientY); 
-                    }
-                }
-            }, { passive: false });
-
-            const handleInvDropEnd = (e) => {
-                if (window.lpTimer) { 
-                    clearTimeout(window.lpTimer); 
-                    window.lpTimer = null; 
-                }
-                if (!window.isDraggingItem) return;
+            if (window.dragState.active) {
+                window.dragState.active = false;
                 
-                window.isDraggingItem = false;
-                window.justDropped = true; 
-                const gh = document.getElementById('invDragGhost');
-                if (gh) gh.style.display = 'none';
+                if (window.lpTimer) {
+                    clearTimeout(window.lpTimer);
+                    window.lpTimer = null;
+                }
+
                 window.stopAutoScroll();
+
+                const dragGhost = document.getElementById('dragGhost');
+                if (dragGhost) dragGhost.style.display = 'none';
+
                 document.body.style.touchAction = '';
 
-                setTimeout(() => {
-                    const targetElem = document.elementFromPoint(window.lastDragX, window.lastDragY);
-                    if (targetElem) {
-                        const dropSlot = targetElem.closest('.inv-slot');
-                        const scSlot = targetElem.closest('.shortcut-slot');
-                        const invWindowObj = targetElem.closest('#invWindow');
-                        if (!window.player) return;
-                        const tabData = window.player.inventory[window.dragState.sourceTab];
-                        
-                        if (dropSlot && dropSlot.dataset.idx !== undefined) {
-                            const targetIdx = parseInt(dropSlot.dataset.idx);
-                            const sourceIdx = window.dragState.sourceIdx;
-                            if (targetIdx !== sourceIdx) {
-                                if (targetIdx < tabData.items.length) {
-                                    let temp = tabData.items[sourceIdx];
-                                    tabData.items[sourceIdx] = tabData.items[targetIdx];
-                                    tabData.items[targetIdx] = temp;
-                                } else {
-                                    let temp = tabData.items[sourceIdx];
-                                    tabData.items.splice(sourceIdx, 1);
-                                    tabData.items.push(temp);
-                                }
-                                if(typeof window.renderInventory === 'function') window.renderInventory();
-                            }
-                        } else if (scSlot && scSlot.dataset.scIdx !== undefined) {
-                            // ショートカットへの登録処理
-                            const scIdx = parseInt(scSlot.dataset.scIdx);
-                            const item = window.dragState.item;
-                            if(typeof window.ensureUIDs === 'function') window.ensureUIDs();
-                            if (!item.uid) item.uid = 'uid_' + Date.now() + '_' + Math.floor(Math.random() * 1000000);
-                            if (typeof window.registerShortcut === 'function') {
-                                window.registerShortcut(scIdx, item);
-                            }
-                        } else if (!invWindowObj && !targetElem.closest('#bottomUIContainer') && !targetElem.closest('#skillCreateWindow')) {
-                            const item = window.dragState.item;
-                            const sIdx = window.dragState.sourceIdx;
-                            if (item.count > 1) {
-                                if (typeof window.showDropDialog === 'function') window.showDropDialog(item, tabData, sIdx);
-                            } else {
-                                window.showConfirmDropDialog(item, tabData, sIdx);
-                            }
+                const dropTarget = document.elementFromPoint(e.clientX, e.clientY);
+                window.isDraggingItem = false;
+
+                if (dropTarget) {
+                    // =========================================================
+                    // ★追加: ショップ売却スロットへのドロップ判定
+                    // =========================================================
+                    const shopSlot = dropTarget.closest('.shop-sell-slot');
+                    if (shopSlot && window.shopState && window.shopState.isOpen && window.shopState.mode === 'sell') {
+                        const slotIdx = parseInt(shopSlot.dataset.slotIdx);
+                        if (typeof window.promptShopSellCount === 'function') {
+                            window.promptShopSellCount(window.dragState.item, slotIdx);
+                        }
+                        if (typeof window.renderInventory === 'function') window.renderInventory();
+                        window.justDropped = true;
+                        if(typeof window.onItemDragEnd === 'function') window.onItemDragEnd(dropTarget);
+                        return;
+                    }
+
+                    // --- 既存の処理 ---
+                    // 先に外部モジュール（ショートカット等）のドロップ判定を呼ぶ
+                    if (typeof window.onItemDragEnd === 'function') {
+                        const handledByOuter = window.onItemDragEnd(dropTarget);
+                        if (handledByOuter) {
+                            window.justDropped = true;
+                            if (typeof window.renderInventory === 'function') window.renderInventory();
+                            return;
                         }
                     }
-                    setTimeout(() => { window.justDropped = false; }, 200);
-                }, 10);
-            };
 
-            window.addEventListener('pointerup', handleInvDropEnd);
-            window.addEventListener('pointercancel', handleInvDropEnd);
-            window.addEventListener('touchend', handleInvDropEnd);
-        }
-    } // -- DOMイベント登録ブロックの終了 --
+                    // インベントリ内の並び替え処理
+                    const targetSlot = dropTarget.closest('.inv-slot');
+                    if (targetSlot) {
+                        const targetIdx = parseInt(targetSlot.dataset.index);
+                        const tabItems = window.player.inventory[window.dragState.sourceTab].items;
+                        
+                        if (targetIdx !== window.dragState.sourceIdx) {
+                            if (targetIdx < tabItems.length) {
+                                const temp = tabItems[window.dragState.sourceIdx];
+                                tabItems[window.dragState.sourceIdx] = tabItems[targetIdx];
+                                tabItems[targetIdx] = temp;
+                            } else {
+                                const item = tabItems.splice(window.dragState.sourceIdx, 1)[0];
+                                tabItems.push(item);
+                            }
+                        }
+                        window.justDropped = true;
+                    }
+                }
+                
+                if (typeof window.renderInventory === 'function') window.renderInventory();
+            }
+        });
 
-    // =========================================================
-    // ★ここから下は、プレイヤーが存在する場合のみ実行される処理
-    // =========================================================
-    if (!window.player) return; 
+        // インベントリ内タップ時の前面化と詳細閉じ
+        window.invWindow.addEventListener('pointerdown', (e) => {
+            if(window.bringToFront) window.bringToFront('invWindow');
+            e.stopPropagation();
+            if (itemDetail && itemDetail.style.display !== 'none' && !itemDetail.contains(e.target) && !e.target.closest('.inv-slot')) {
+                itemDetail.style.display = 'none';
+            }
+        });
 
-    if(typeof window.ensureUIDs === 'function') window.ensureUIDs();
+        // --- 「使う/装備/はずす」ボタンの処理 ---
+        document.getElementById('btnUseEquip').addEventListener('pointerdown', (e) => {
+            e.stopPropagation();
+            const btn = e.target;
+            const tabId = window.tabsList[window.currentTabIndex];
+            const item = window.player.inventory[tabId].items[window.selectedItemIndex];
 
-    // --- CT減算とDOM更新ループ (二重起動防止) ---
-    if (!window.__invCTLoopStarted) {
-        window.__invCTLoopStarted = true;
-        let lastTimeCT = performance.now();
-        function updateCT() {
-            let now = performance.now();
-            let dt = (now - lastTimeCT) / 1000;
-            lastTimeCT = now;
+            if (!item) return;
+
+            // スキルチップ素材の場合のフック
+            if (btn.dataset.isChip === "true") {
+                if(typeof window.openSkillCreateFromItem === 'function') {
+                    window.openSkillCreateFromItem(item);
+                    itemDetail.style.display = 'none';
+                }
+                return;
+            }
             
-            for (let id in window.itemCooldowns) {
-                if (window.itemCooldowns[id] > 0) {
-                    window.itemCooldowns[id] -= dt;
-                    if (window.itemCooldowns[id] <= 0) {
-                        delete window.itemCooldowns[id];
+            // スキルの場合のフック
+            if (btn.dataset.isSkill === "true") {
+                if(typeof window.executeSkill === 'function') {
+                    window.executeSkill(item);
+                    itemDetail.style.display = 'none';
+                }
+                return;
+            }
+
+            if (item.type === 'equip') {
+                if (item.isEquipped) {
+                    item.isEquipped = false;
+                    window.player.equipped[item.equipSlot] = null;
+                } else {
+                    const currentEquip = window.player.equipped[item.equipSlot];
+                    if (currentEquip) {
+                        const prevItem = window.player.inventory[tabId].items.find(i => i.id === currentEquip.id && i.isEquipped);
+                        if (prevItem) prevItem.isEquipped = false;
+                    }
+                    item.isEquipped = true;
+                    window.player.equipped[item.equipSlot] = item;
+                }
+                if (typeof window.updatePlayerStats === 'function') window.updatePlayerStats();
+            } else if (item.type === 'consume') {
+                // クールタイム中なら使用不可
+                if (window.itemCooldowns[item.id] > 0) return;
+
+                if (item.restore) {
+                    window.player.hp = Math.min(window.player.maxHp, window.player.hp + item.restore);
+                    if(typeof window.addLog === 'function') window.addLog(`<span class='color-sys'><span class='color-item'>${item.name}</span> を使い、HPが <span class='color-heal'>${item.restore}</span> 回復した。</span>`, 'sys');
+                    
+                    if (typeof window.updateWidgetUI === 'function') window.updateWidgetUI();
+                    
+                    const statusWindow = document.getElementById('statusWindow');
+                    if (statusWindow && statusWindow.style.display === 'flex' && typeof window.updateStatusUI === 'function') {
+                        window.updateStatusUI();
+                    }
+                }
+                
+                // アイテム固有のCTをセット (2秒)
+                window.itemCooldowns[item.id] = 2.0;
+                window.itemMaxCooldowns[item.id] = 2.0;
+
+                item.count--;
+                if (item.count <= 0) {
+                    window.player.inventory[tabId].items.splice(window.selectedItemIndex, 1);
+                    itemDetail.style.display = 'none';
+                    window.selectedItemIndex = -1;
+                } else {
+                    if (typeof window.showItemDetail === 'function') {
+                        const slots = document.querySelectorAll('.inv-slot');
+                        if(slots[window.selectedItemIndex]) {
+                            window.showItemDetail(item, slots[window.selectedItemIndex]);
+                        }
                     }
                 }
             }
-            
-            const allOverlays = document.querySelectorAll('.ct-overlay, .ct-overlay-sc');
-            allOverlays.forEach(overlay => {
-                const id = overlay.getAttribute('data-ct-id');
-                if (window.itemCooldowns && window.itemCooldowns[id] > 0) {
-                    const maxCt = (window.itemMaxCooldowns && window.itemMaxCooldowns[id]) ? window.itemMaxCooldowns[id] : 3.0;
-                    const ratio = window.itemCooldowns[id] / maxCt; 
-                    overlay.style.height = `${ratio * 100}%`; 
-                } else {
-                    overlay.style.height = `0%`;
-                }
-            });
 
-            requestAnimationFrame(updateCT);
-        }
-        requestAnimationFrame(updateCT);
-    }
-
-    // インベントリ用ゴーストアイコンの生成
-    let ghost = document.getElementById('invDragGhost');
-    if (!ghost) {
-        ghost = document.createElement('div');
-        ghost.id = 'invDragGhost';
-        ghost.style.cssText = 'position: fixed; pointer-events: none; display: none; z-index: 1000; width: 44px; height: 44px; justify-content: center; align-items: center; opacity: 0.8; transform: translate(-50%, -50%);';
-        document.body.appendChild(ghost);
-    }
-
-    // ショートカットの初期化関数が読み込まれていれば実行
-    if (typeof window.initShortcutUI === 'function') {
-        window.initShortcutUI();
+            if (typeof window.renderInventory === 'function') window.renderInventory();
+        });
     }
 };
 
-window.startInventoryDrag = function(item, idx, tabName, rarityColor) {
-    window.isDraggingItem = true;
-    window.dragState = { active: true, item: item, sourceIdx: idx, sourceTab: tabName };
-    document.body.style.touchAction = 'none';
-
-    const ghost = document.getElementById('invDragGhost');
-    if (ghost) {
-        ghost.innerHTML = `<div style="width: 70%; height: 70%; border-radius: 50%; background-color: ${item.color}; border: 2px solid ${rarityColor}; box-sizing: border-box;"></div>`;
-        ghost.style.left = window.lastDragX + 'px';
-        ghost.style.top = window.lastDragY + 'px';
-        ghost.style.display = 'flex';
+window.toggleInventory = function() {
+    window.ensureUIDs();
+    window.compressStacks();
+    const invWindow = document.getElementById('invWindow');
+    if (invWindow.style.display === 'none' || invWindow.style.display === '') {
+        invWindow.style.display = 'flex';
+        if (typeof window.renderInventory === 'function') window.renderInventory();
+        if(window.bringToFront) window.bringToFront('invWindow');
+    } else {
+        invWindow.style.display = 'none';
+        document.getElementById('itemDetail').style.display = 'none';
     }
 };
 
-window.executeDropLogic = function(item, tabData, idx, count) {
-    if (item.isEquipped) { 
-        item.isEquipped = false; 
-        window.player.equipped[item.equipSlot] = null; 
-        if(typeof window.updatePlayerStats === 'function') window.updatePlayerStats(); 
-    }
-    item.count -= count;
-    if (item.count <= 0) { 
-        tabData.items.splice(idx, 1); 
-        window.selectedItemIndex = -1; 
-    }
-    
-    const droppedItem = {
-        uid: Date.now() + Math.random(), 
-        id: item.id, 
-        type: item.type, 
-        equipSlot: item.equipSlot, 
-        name: item.name, 
-        rarity: item.rarity, 
-        color: item.color, 
-        desc: item.desc, 
-        stats: item.stats, 
-        element: item.element, 
-        elementParams: item.elementParams, 
-        resists: item.resists, 
-        restore: item.restore, 
-        maxStack: item.maxStack, 
-        count: count, 
-        x: window.player.x, 
-        y: window.player.y, 
-        radius: 8, 
-        ownerId: window.player.id, 
-        lifeTime: 0
-    };
-    
-    if (item.chipData) droppedItem.chipData = JSON.parse(JSON.stringify(item.chipData));
-    if (item.materialData) droppedItem.materialData = JSON.parse(JSON.stringify(item.materialData));
-    if (item.type === 'skill' || item.icon || item.skillData) {
-        if (item.icon) droppedItem.icon = item.icon;
-        if (item.skillData) droppedItem.skillData = JSON.parse(JSON.stringify(item.skillData));
-    }
-
-    window.droppedItems.push(droppedItem);
-    
-    const itemDetail = document.getElementById('itemDetail');
-    if (itemDetail) itemDetail.style.display = 'none'; 
-    if(typeof window.renderInventory === 'function') window.renderInventory();
-};
-
-window.showConfirmDropDialog = function(item, tabData, idx) {
-    if (document.getElementById('dropConfirmOverlay')) return; 
-    
-    const overlay = document.createElement('div'); 
-    overlay.id = 'dropConfirmOverlay';
-    overlay.style.cssText = 'position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:60; display:flex; justify-content:center; align-items:center; pointer-events:auto; touch-action:none;';
-    
-    const stopAll = (e) => { 
-        e.stopPropagation(); 
-        if(e.cancelable && e.target.tagName !== 'INPUT') e.preventDefault(); 
-    };
-    
-    overlay.addEventListener('pointerdown', (e) => { 
-        e.stopPropagation(); 
-        if (e.target === overlay) overlay.remove(); 
-    });
-    overlay.addEventListener('pointerup', stopAll); 
-    overlay.addEventListener('pointermove', stopAll); 
-    overlay.addEventListener('touchstart', stopAll, {passive: false}); 
-    overlay.addEventListener('touchend', stopAll, {passive: false}); 
-    overlay.addEventListener('click', stopAll);
-    
-    const dialog = document.createElement('div');
-    dialog.style.cssText = 'width:200px; background:rgba(20,20,20,0.95); border:1px solid #777; border-radius:8px; padding:15px; position:relative; text-align:center; color:white;';
-    
-    const closeBtn = document.createElement('span'); 
-    closeBtn.innerText = '❌'; 
-    closeBtn.style.cssText = 'position:absolute; right:10px; top:10px; cursor:pointer; font-size:12px; padding:5px;';
-    closeBtn.addEventListener('pointerdown', (e) => { 
-        e.stopPropagation(); 
-        overlay.remove(); 
-    });
-    
-    const msg = document.createElement('div'); 
-    msg.innerText = `${item.name} を落としますか？`; 
-    msg.style.cssText = 'margin-bottom:15px; font-size:14px; font-weight:bold;';
-    
-    const okBtn = document.createElement('button'); 
-    okBtn.innerText = 'OK'; 
-    okBtn.style.cssText = 'background:#663; color:white; border:none; padding:8px 20px; border-radius:4px; font-weight:bold; cursor:pointer;';
-    okBtn.addEventListener('pointerdown', stopAll); 
-    okBtn.addEventListener('pointerup', (e) => { 
-        e.stopPropagation(); 
-        window.executeDropLogic(item, tabData, idx, 1); 
-        overlay.remove(); 
-    });
-    
-    dialog.appendChild(closeBtn); 
-    dialog.appendChild(msg); 
-    dialog.appendChild(okBtn); 
-    overlay.appendChild(dialog);
-    
-    document.getElementById('ui-layer').appendChild(overlay);
-};
-
-window.showDropDialog = function(item, tabData, selectedIndex) {
-    if (document.getElementById('dropAmountOverlay')) return; 
-    
-    const overlay = document.createElement('div'); 
-    overlay.id = 'dropAmountOverlay';
-    overlay.style.cssText = 'position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:60; display:flex; justify-content:center; align-items:center; pointer-events:auto; touch-action:none;';
-    
-    const stopAll = (e) => { 
-        e.stopPropagation(); 
-        if(e.cancelable && e.target.tagName !== 'INPUT') e.preventDefault(); 
-    };
-    
-    overlay.addEventListener('pointerdown', (e) => { 
-        e.stopPropagation(); 
-        if (e.target === overlay) overlay.remove(); 
-    });
-    overlay.addEventListener('pointerup', stopAll); 
-    overlay.addEventListener('pointermove', stopAll); 
-    overlay.addEventListener('touchstart', stopAll, {passive: false}); 
-    overlay.addEventListener('touchend', stopAll, {passive: false}); 
-    overlay.addEventListener('click', stopAll);
-
-    const dialog = document.createElement('div');
-    dialog.style.cssText = 'width:180px; background:rgba(20,20,20,0.95); border:1px solid #777; border-radius:8px; padding:15px; position:relative; text-align:center; color:white;';
-    
-    const closeBtn = document.createElement('span'); 
-    closeBtn.innerText = '❌'; 
-    closeBtn.style.cssText = 'position:absolute; right:10px; top:10px; cursor:pointer; font-size:12px; padding:5px;';
-    closeBtn.addEventListener('pointerdown', (e) => { 
-        e.stopPropagation(); 
-        overlay.remove(); 
-    });
-    
-    const title = document.createElement('div'); 
-    title.innerText = '置く個数を指定'; 
-    title.style.cssText = 'color:white; margin-bottom:15px; font-size:14px; font-weight:bold; text-align:center;';
-    
-    const countContainer = document.createElement('div'); 
-    countContainer.style.cssText = 'display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;';
-
-    let currentCount = 1;
-    const countDisplay = document.createElement('div'); 
-    countDisplay.innerText = currentCount + ' 個'; 
-    countDisplay.style.cssText = 'color:#00ffff; font-size:16px; font-weight:bold;';
-    
-    const btnStyle = "background-color: #444; color: white; border: 1px solid #666; border-radius: 4px; width: 30px; height: 30px; font-size: 18px; font-weight: bold; cursor: pointer; display: flex; justify-content: center; align-items: center; user-select: none;";
-    const minusBtn = document.createElement('div'); 
-    minusBtn.innerText = '－'; 
-    minusBtn.style.cssText = btnStyle;
-    const plusBtn = document.createElement('div'); 
-    plusBtn.innerText = '＋'; 
-    plusBtn.style.cssText = btnStyle;
-
-    const slider = document.createElement('input'); 
-    slider.type = 'range'; 
-    slider.min = 1; 
-    slider.max = item.count; 
-    slider.value = 1; 
-    slider.style.cssText = 'width:100%; margin-bottom:15px;';
-    
-    const updateDisplay = () => { 
-        countDisplay.innerText = currentCount + ' 個'; 
-        slider.value = currentCount; 
-    };
-
-    minusBtn.addEventListener('pointerdown', (e) => { 
-        e.stopPropagation(); 
-        if (currentCount > 1) { currentCount--; updateDisplay(); } 
-    });
-    plusBtn.addEventListener('pointerdown', (e) => { 
-        e.stopPropagation(); 
-        if (currentCount < item.count) { currentCount++; updateDisplay(); } 
-    });
-    
-    slider.addEventListener('pointerdown', (e) => { e.stopPropagation(); }); 
-    slider.addEventListener('pointermove', (e) => { e.stopPropagation(); });
-    slider.addEventListener('input', (e) => { 
-        currentCount = parseInt(e.target.value, 10); 
-        countDisplay.innerText = currentCount + ' 個'; 
-    });
-
-    const okBtn = document.createElement('button'); 
-    okBtn.innerText = '決定'; 
-    okBtn.style.cssText = 'background:#663; color:white; border:none; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer; width:100%;';
-    okBtn.addEventListener('pointerdown', stopAll);
-    okBtn.addEventListener('pointerup', (e) => { 
-        e.stopPropagation(); 
-        window.executeDropLogic(item, tabData, selectedIndex, currentCount); 
-        overlay.remove(); 
-    });
-
-    countContainer.appendChild(minusBtn); 
-    countContainer.appendChild(countDisplay); 
-    countContainer.appendChild(plusBtn);
-    
-    dialog.appendChild(closeBtn); 
-    dialog.appendChild(title); 
-    dialog.appendChild(countContainer); 
-    dialog.appendChild(slider); 
-    dialog.appendChild(okBtn);
-    
-    overlay.appendChild(dialog); 
-    document.getElementById('ui-layer').appendChild(overlay);
-};
-
-window.scrollInterval = null;
+// ==========================================
+// ドラッグ中の自動スクロール判定
+// ==========================================
 window.checkAutoScroll = function(y) {
-    const invWindow = document.getElementById('invWindow'); 
     const invContent = document.getElementById('invContent');
-    if (!invWindow || invWindow.style.display !== 'flex' || !invContent) return;
+    if (window.invWindow.style.display !== 'flex' || !invContent) return;
     
     const rect = invContent.getBoundingClientRect(); 
     const threshold = 35; 
