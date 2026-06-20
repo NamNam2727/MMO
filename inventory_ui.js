@@ -3,47 +3,16 @@
 // インベントリの描画、タブ切り替え、アイテム詳細表示(動的テキスト対応)
 // =========================================================
 
-// ★追加: インベントリが巨大化するのを防ぐため、強制的に横4マスのグリッドスタイルを適用する
-if (!document.getElementById('inventoryDynamicStyle')) {
-    const style = document.createElement('style');
-    style.id = 'inventoryDynamicStyle';
-    style.innerHTML = `
-        #invContent {
-            display: grid !important;
-            grid-template-columns: repeat(4, 1fr) !important;
-            grid-auto-rows: max-content !important;
-            gap: 5px !important;
-            padding: 10px !important;
-            align-content: start !important;
-        }
-        .inv-slot {
-            width: 100% !important;
-            aspect-ratio: 1 !important;
-            background: rgba(255,255,255,0.1);
-            border: 1px solid #777;
-            border-radius: 4px;
-            position: relative;
-            box-sizing: border-box;
-            cursor: pointer;
-        }
-    `;
-    document.head.appendChild(style);
-}
-
 window.tabsList = ['equip', 'consume', 'skill', 'etc', 'important'];
-window.currentTabIndex = 0;
+window.currentTabIndex = window.currentTabIndex || 0;
 window.selectedItemIndex = -1;
 
 window.isDraggingItem = false;
 window.dragState = { active: false, item: null, sourceIdx: -1, sourceTab: null };
-window.lpStartX = 0;
-window.lpStartY = 0;
-window.lastDragX = 0; 
-window.lastDragY = 0;
-window.lpTimer = null;
-window.justDropped = false;
-
-window.itemCooldowns = {};
+window.lpStartX = 0; window.lpStartY = 0;
+window.lastDragX = 0; window.lastDragY = 0;
+window.lpTimer = null; window.justDropped = false;
+window.itemCooldowns = window.itemCooldowns || {};
 
 window.ensureUIDs = function() {
     if (!window.player || !window.player.inventory) return;
@@ -84,30 +53,23 @@ window.compressStacks = function() {
 };
 
 window.renderInventory = function() {
-    const invTabs = document.getElementById('invTabs');
     const invContent = document.getElementById('invContent');
     const itemDetail = document.getElementById('itemDetail');
-    if (!invTabs || !invContent || !itemDetail) return;
+    if (!invContent || !itemDetail) return;
 
     if (typeof window.validateShopCart === 'function') {
         window.validateShopCart();
     }
 
-    invTabs.innerHTML = '';
-    const tabNames = { equip: '装備', consume: '消費', skill: 'スキル', etc: 'ETC', important: '重要' };
-    window.tabsList.forEach((tabId, index) => {
-        const tab = document.createElement('div');
-        tab.className = 'inv-tab' + (index === window.currentTabIndex ? ' active' : '');
-        tab.innerText = tabNames[tabId];
-        tab.addEventListener('pointerdown', (e) => {
-            e.stopPropagation();
-            window.currentTabIndex = index;
-            window.selectedItemIndex = -1;
-            itemDetail.style.display = 'none';
-            window.renderInventory();
+    // ★修正: お客様が作られたタブUI（HTMLやイベント）を破壊しないように、
+    // HTMLの作り直しをやめ、CSSのクラス付け替えのみでアクティブ状態を管理します。
+    const tabs = document.querySelectorAll('.inv-tab');
+    if (tabs.length > 0) {
+        tabs.forEach((tab, index) => {
+            if (index === window.currentTabIndex) tab.classList.add('active');
+            else tab.classList.remove('active');
         });
-        invTabs.appendChild(tab);
-    });
+    }
 
     invContent.innerHTML = '';
     const tabId = window.tabsList[window.currentTabIndex];
@@ -129,20 +91,17 @@ window.renderInventory = function() {
                 slot.style.pointerEvents = 'none'; 
             }
 
-            if (item.type === 'equip') {
-                if (item.equipSlot === 'weapon') slot.innerHTML = `<div class="item-icon" style="background:${item.color}; width:100%; height:100%; display:flex; justify-content:center; align-items:center;">剣</div>`;
-                else if (item.equipSlot === 'armor') slot.innerHTML = `<div class="item-icon" style="background:${item.color}; width:100%; height:100%; display:flex; justify-content:center; align-items:center;">鎧</div>`;
-                else slot.innerHTML = `<div class="item-icon" style="background:${item.color}; width:100%; height:100%; display:flex; justify-content:center; align-items:center;">飾</div>`;
-            } else if (item.type === 'consume' && item.restore) {
-                slot.innerHTML = `<div class="item-icon" style="background:${item.color}; border-radius:50%; width:100%; height:100%; display:flex; justify-content:center; align-items:center;">薬</div>`;
-            } else if (item.chipData) {
-                slot.innerHTML = `<div class="item-icon" style="background:${item.color}; border-radius:0; width:100%; height:100%; display:flex; justify-content:center; align-items:center;">CP</div>`;
-            } else {
-                slot.innerHTML = `<div class="item-icon" style="background:${item.color}; width:100%; height:100%; display:flex; justify-content:center; align-items:center;">他</div>`;
+            // ★修正: 勝手に追加した「剣」などの文字を消去し、以前のシンプルな表示に戻しました。
+            let borderRadius = '4px';
+            if (item.type === 'consume' || (item.type === 'equip' && item.equipSlot !== 'weapon' && item.equipSlot !== 'armor')) {
+                borderRadius = '50%';
             }
+            if (item.chipData) borderRadius = '0';
+            
+            slot.innerHTML = `<div class="item-icon" style="background:${item.color}; border-radius:${borderRadius}; width:100%; height:100%;"></div>`;
             
             if (item.maxStack > 1) {
-                slot.innerHTML += `<div class="item-count" style="position:absolute; bottom:2px; right:4px; font-size:12px; font-weight:bold; text-shadow:1px 1px 1px #000;">${item.count}</div>`;
+                slot.innerHTML += `<div class="item-count">${item.count}</div>`;
             }
 
             if (window.itemCooldowns && window.itemCooldowns[item.id] > 0 && window.itemMaxCooldowns[item.id] > 0) {
@@ -188,6 +147,21 @@ window.renderInventory = function() {
                 }, 400); 
             });
 
+            // ★修正: スクロール操作の途中で長押しが発動してしまう不具合を解消しました。
+            slot.addEventListener('pointermove', (e) => {
+                if (window.lpTimer) {
+                    const dx = e.clientX - window.lpStartX;
+                    const dy = e.clientY - window.lpStartY;
+                    if (Math.hypot(dx, dy) > 10) {
+                        clearTimeout(window.lpTimer);
+                        window.lpTimer = null;
+                    }
+                }
+            });
+            slot.addEventListener('pointercancel', (e) => {
+                if (window.lpTimer) { clearTimeout(window.lpTimer); window.lpTimer = null; }
+            });
+
             slot.addEventListener('pointerup', (e) => {
                 if (window.lpTimer) { clearTimeout(window.lpTimer); window.lpTimer = null; }
                 if (window.justDropped) return; 
@@ -216,9 +190,7 @@ window.showItemDetail = function(item, slotElement) {
     
     let descText = item.desc || '';
     if (item.type === 'skill') {
-        if (typeof window.getCalculatedSkillDesc === 'function') {
-            descText = window.getCalculatedSkillDesc(item);
-        }
+        if (typeof window.getCalculatedSkillDesc === 'function') descText = window.getCalculatedSkillDesc(item);
     } else if (item.chipData) {
         const depText = item.chipData.dependency === 'str' ? 'ちから' : item.chipData.dependency === 'int' ? 'まりょく' : '';
         const targetText = item.chipData.targetType === 'self' ? '自身' : item.chipData.targetType === 'ally' ? '味方' : '敵';
@@ -235,67 +207,36 @@ window.showItemDetail = function(item, slotElement) {
 
     let statsHtml = '';
     if (item.stats) {
-        for (let key in item.stats) {
-            statsHtml += `<div>${key.toUpperCase()}: +${item.stats[key]}</div>`;
-        }
+        for (let key in item.stats) { statsHtml += `<div>${key.toUpperCase()}: +${item.stats[key]}</div>`; }
     }
-    if (item.element) {
-        statsHtml += `<div style=\"color:#ffaa00;\">属性: ${item.element.toUpperCase()}</div>`;
-    }
+    if (item.element) { statsHtml += `<div style=\"color:#ffaa00;\">属性: ${item.element.toUpperCase()}</div>`; }
     document.getElementById('detailStats').innerHTML = statsHtml;
 
     const btnUseEquip = document.getElementById('btnUseEquip');
     
     if (item.type === 'skill') {
-        btnUseEquip.innerText = 'スキル発動';
-        btnUseEquip.className = 'detail-btn';
-        btnUseEquip.style.backgroundColor = '#cc22cc';
-        btnUseEquip.style.display = 'block';
-        btnUseEquip.dataset.isSkill = "true";
-        btnUseEquip.dataset.isChip = "false";
-    }
-    else if (item.chipData) { 
-        btnUseEquip.innerText = '使用 (スキル作成)';
-        btnUseEquip.className = 'detail-btn';
-        btnUseEquip.style.backgroundColor = '#aa5500';
-        btnUseEquip.style.display = 'block';
-        btnUseEquip.dataset.isChip = "true";
-        btnUseEquip.dataset.isSkill = "false";
+        btnUseEquip.innerText = 'スキル発動'; btnUseEquip.className = 'detail-btn'; btnUseEquip.style.backgroundColor = '#cc22cc';
+        btnUseEquip.style.display = 'block'; btnUseEquip.dataset.isSkill = "true"; btnUseEquip.dataset.isChip = "false";
+    } else if (item.chipData) { 
+        btnUseEquip.innerText = '使用 (スキル作成)'; btnUseEquip.className = 'detail-btn'; btnUseEquip.style.backgroundColor = '#aa5500';
+        btnUseEquip.style.display = 'block'; btnUseEquip.dataset.isChip = "true"; btnUseEquip.dataset.isSkill = "false";
     } else {
-        btnUseEquip.dataset.isChip = "false";
-        btnUseEquip.dataset.isSkill = "false";
-        btnUseEquip.style.backgroundColor = ''; 
+        btnUseEquip.dataset.isChip = "false"; btnUseEquip.dataset.isSkill = "false"; btnUseEquip.style.backgroundColor = ''; 
         if (item.type === 'equip') {
             btnUseEquip.style.display = 'block';
-            if (item.isEquipped) { 
-                btnUseEquip.innerText = 'はずす'; 
-                btnUseEquip.className = 'detail-btn btn-unequip'; 
-            } else { 
-                btnUseEquip.innerText = '装備'; 
-                btnUseEquip.className = 'detail-btn btn-equip'; 
-            }
+            if (item.isEquipped) { btnUseEquip.innerText = 'はずす'; btnUseEquip.className = 'detail-btn btn-unequip'; } 
+            else { btnUseEquip.innerText = '装備'; btnUseEquip.className = 'detail-btn btn-equip'; }
         } else if (item.type === 'consume') {
-            btnUseEquip.style.display = 'block';
-            btnUseEquip.innerText = '使う';
-            btnUseEquip.className = 'detail-btn btn-consume';
+            btnUseEquip.style.display = 'block'; btnUseEquip.innerText = '使う'; btnUseEquip.className = 'detail-btn btn-consume';
         } else {
             btnUseEquip.style.display = 'none';
         }
     }
 
     const rect = slotElement.getBoundingClientRect();
-    let topPos = rect.bottom + 5;
-    let leftPos = rect.left;
-    
+    let topPos = rect.bottom + 5; let leftPos = rect.left;
     itemDetail.style.display = 'flex';
-    
-    if (leftPos + itemDetail.offsetWidth > window.innerWidth) {
-        leftPos = window.innerWidth - itemDetail.offsetWidth - 5;
-    }
-    if (topPos + itemDetail.offsetHeight > window.innerHeight) {
-        topPos = rect.top - itemDetail.offsetHeight - 5;
-    }
-    
-    itemDetail.style.top = topPos + 'px';
-    itemDetail.style.left = leftPos + 'px';
+    if (leftPos + itemDetail.offsetWidth > window.innerWidth) leftPos = window.innerWidth - itemDetail.offsetWidth - 5;
+    if (topPos + itemDetail.offsetHeight > window.innerHeight) topPos = rect.top - itemDetail.offsetHeight - 5;
+    itemDetail.style.top = topPos + 'px'; itemDetail.style.left = leftPos + 'px';
 };
