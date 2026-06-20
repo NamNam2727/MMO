@@ -21,13 +21,15 @@ window.MapManager = {
         },
         'worldMap': {
             name: 'ワールドマップ',
-            scriptUrl: 'maps/world/data.js'
+            scriptUrl: 'maps/world/data.js',
+            // ★追加: ワールドマップ用のBGM設定
+            bgmUrl: 'maps/world/bgm.js',    
+            bgmGlobal: 'WorldMapBGM'
         },
         'plains': {
             name: 'グライム平原',
             scriptUrl: 'maps/plains/map1.js'
         },
-        // ★追加: グライム平原 その2 を目次に追加
         'plains_map2': {
             name: 'グライム平原 その2',
             scriptUrl: 'maps/plains/map2.js'
