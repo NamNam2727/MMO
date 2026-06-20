@@ -3,6 +3,33 @@
 // インベントリの描画、タブ切り替え、アイテム詳細表示(動的テキスト対応)
 // =========================================================
 
+// ★追加: インベントリが巨大化するのを防ぐため、強制的に横4マスのグリッドスタイルを適用する
+if (!document.getElementById('inventoryDynamicStyle')) {
+    const style = document.createElement('style');
+    style.id = 'inventoryDynamicStyle';
+    style.innerHTML = `
+        #invContent {
+            display: grid !important;
+            grid-template-columns: repeat(4, 1fr) !important;
+            grid-auto-rows: max-content !important;
+            gap: 5px !important;
+            padding: 10px !important;
+            align-content: start !important;
+        }
+        .inv-slot {
+            width: 100% !important;
+            aspect-ratio: 1 !important;
+            background: rgba(255,255,255,0.1);
+            border: 1px solid #777;
+            border-radius: 4px;
+            position: relative;
+            box-sizing: border-box;
+            cursor: pointer;
+        }
+    `;
+    document.head.appendChild(style);
+}
+
 window.tabsList = ['equip', 'consume', 'skill', 'etc', 'important'];
 window.currentTabIndex = 0;
 window.selectedItemIndex = -1;
@@ -62,7 +89,6 @@ window.renderInventory = function() {
     const itemDetail = document.getElementById('itemDetail');
     if (!invTabs || !invContent || !itemDetail) return;
 
-    // ★追加: ショップの売却カート整合性チェック
     if (typeof window.validateShopCart === 'function') {
         window.validateShopCart();
     }
@@ -91,7 +117,6 @@ window.renderInventory = function() {
             slot.className = 'inv-slot';
             slot.dataset.index = index;
             
-            // ★追加: ショップで売却カートに入っているかチェック
             let isLockedByShop = false;
             if (window.shopState && window.shopState.isOpen && window.shopState.mode === 'sell') {
                 isLockedByShop = window.shopState.cart.some(c => c && c.item && c.item.uid === item.uid);
@@ -100,28 +125,26 @@ window.renderInventory = function() {
             if (item.isEquipped) {
                 slot.classList.add('equipped');
             } else if (isLockedByShop) {
-                // ★追加: カート登録中は半透明にしてドラッグ・タップ不可にする
                 slot.style.opacity = '0.3';
                 slot.style.pointerEvents = 'none'; 
             }
 
             if (item.type === 'equip') {
-                if (item.equipSlot === 'weapon') slot.innerHTML = `<div class="item-icon" style="background:${item.color};">剣</div>`;
-                else if (item.equipSlot === 'armor') slot.innerHTML = `<div class="item-icon" style="background:${item.color};">鎧</div>`;
-                else slot.innerHTML = `<div class="item-icon" style="background:${item.color};">飾</div>`;
+                if (item.equipSlot === 'weapon') slot.innerHTML = `<div class="item-icon" style="background:${item.color}; width:100%; height:100%; display:flex; justify-content:center; align-items:center;">剣</div>`;
+                else if (item.equipSlot === 'armor') slot.innerHTML = `<div class="item-icon" style="background:${item.color}; width:100%; height:100%; display:flex; justify-content:center; align-items:center;">鎧</div>`;
+                else slot.innerHTML = `<div class="item-icon" style="background:${item.color}; width:100%; height:100%; display:flex; justify-content:center; align-items:center;">飾</div>`;
             } else if (item.type === 'consume' && item.restore) {
-                slot.innerHTML = `<div class="item-icon" style="background:${item.color}; border-radius:50%;">薬</div>`;
+                slot.innerHTML = `<div class="item-icon" style="background:${item.color}; border-radius:50%; width:100%; height:100%; display:flex; justify-content:center; align-items:center;">薬</div>`;
             } else if (item.chipData) {
-                slot.innerHTML = `<div class="item-icon" style="background:${item.color}; border-radius:0;">CP</div>`;
+                slot.innerHTML = `<div class="item-icon" style="background:${item.color}; border-radius:0; width:100%; height:100%; display:flex; justify-content:center; align-items:center;">CP</div>`;
             } else {
-                slot.innerHTML = `<div class="item-icon" style="background:${item.color};">他</div>`;
+                slot.innerHTML = `<div class="item-icon" style="background:${item.color}; width:100%; height:100%; display:flex; justify-content:center; align-items:center;">他</div>`;
             }
             
             if (item.maxStack > 1) {
-                slot.innerHTML += `<div class="item-count">${item.count}</div>`;
+                slot.innerHTML += `<div class="item-count" style="position:absolute; bottom:2px; right:4px; font-size:12px; font-weight:bold; text-shadow:1px 1px 1px #000;">${item.count}</div>`;
             }
 
-            // CTオーバーレイの描画
             if (window.itemCooldowns && window.itemCooldowns[item.id] > 0 && window.itemMaxCooldowns[item.id] > 0) {
                 const ratio = window.itemCooldowns[item.id] / window.itemMaxCooldowns[item.id];
                 slot.innerHTML += `<div style="position:absolute; bottom:0; left:0; width:100%; height:${ratio * 100}%; background:rgba(0,0,0,0.6); pointer-events:none;"></div>`;

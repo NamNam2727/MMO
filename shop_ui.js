@@ -4,18 +4,16 @@
 // =========================================================
 
 (function() {
-    // ショップのグローバル状態管理
     window.shopState = {
         isOpen: false,
         npc: null,
-        mode: 'buy', // 'buy' または 'sell'
-        cart: Array(24).fill(null), // { item: (アイテムデータ), count: (個数) }
+        mode: 'buy', 
+        cart: Array(24).fill(null), 
         selectedBuyItemId: null,
         selectedSellSlot: -1,
         buyCount: 1
     };
 
-    // --- アイテムアイコンのHTML生成ヘルパー ---
     window.getItemIconHTML = function(item) {
         if (!item) return '';
         if (item.type === 'equip') {
@@ -25,7 +23,7 @@
         } else if (item.type === 'consume' && item.restore) {
             return `<div class="item-icon" style="background:${item.color}; border-radius:50%; width:100%; height:100%; display:flex; justify-content:center; align-items:center;">薬</div>`;
         } else if (item.chipData) {
-            return `<div class="item-icon" style="background:${item.color}; width:100%; height:100%; display:flex; justify-content:center; align-items:center;">CP</div>`;
+            return `<div class="item-icon" style="background:${item.color}; border-radius:0; width:100%; height:100%; display:flex; justify-content:center; align-items:center;">CP</div>`;
         } else {
             return `<div class="item-icon" style="background:${item.color}; width:100%; height:100%; display:flex; justify-content:center; align-items:center;">他</div>`;
         }
@@ -34,7 +32,8 @@
     window.initShopUI = function() {
         const shopWin = document.createElement('div');
         shopWin.id = 'shopWindow';
-        shopWin.style.cssText = 'position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); display:none; flex-direction:column; width:90vw; max-width:800px; height:85vh; max-height:600px; background:rgba(20,20,30,0.95); border:2px solid #aaa; border-radius:8px; z-index:80; color:#fff; pointer-events:auto; touch-action:none; box-shadow:0 10px 30px rgba(0,0,0,0.9);';
+        // 全体の幅を少し大きくして、スロットのサイズを確保しやすくする
+        shopWin.style.cssText = 'position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); display:none; flex-direction:column; width:95vw; max-width:850px; height:85vh; max-height:600px; background:rgba(20,20,30,0.95); border:2px solid #aaa; border-radius:8px; z-index:80; color:#fff; pointer-events:auto; touch-action:none; box-shadow:0 10px 30px rgba(0,0,0,0.9);';
         
         shopWin.addEventListener('pointerdown', (e) => {
             if(window.bringToFront) window.bringToFront('shopWindow');
@@ -42,7 +41,6 @@
         });
 
         shopWin.innerHTML = `
-            <!-- タイトルバー -->
             <div id="shopTitleBar" style="padding:10px; background:linear-gradient(to right, #445, #223); border-bottom:1px solid #777; border-radius:6px 6px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:move;">
                 <div style="font-weight:bold; font-size:16px;">ショップ - <span id="shopNpcName">商人</span></div>
                 <div style="display:flex; align-items:center; gap:15px;">
@@ -51,20 +49,19 @@
                 </div>
             </div>
 
-            <!-- メインボディ (3ペイン) -->
             <div style="display:flex; flex:1; overflow:hidden;">
                 
-                <!-- 左ペイン: タブ -->
-                <div style="width:60px; background:rgba(0,0,0,0.3); border-right:1px solid #555; display:flex; flex-direction:column; align-items:center; padding-top:10px; gap:10px;">
-                    <div id="shopTabBuy" class="shop-tab" style="width:50px; height:50px; background:#4CAF50; border:2px solid #fff; border-radius:50%; display:flex; justify-content:center; align-items:center; font-weight:bold; cursor:pointer; box-shadow:0 0 10px rgba(76,175,80,0.5);">かう</div>
-                    <div id="shopTabSell" class="shop-tab" style="width:50px; height:50px; background:#555; border:2px solid #777; border-radius:50%; display:flex; justify-content:center; align-items:center; font-weight:bold; cursor:pointer;">うる</div>
+                <!-- ★変更: タブの幅をスリム化 -->
+                <div style="width:50px; background:rgba(0,0,0,0.3); border-right:1px solid #555; display:flex; flex-direction:column; align-items:center; padding-top:10px; gap:10px;">
+                    <div id="shopTabBuy" class="shop-tab" style="width:40px; height:40px; background:#4CAF50; border:2px solid #fff; border-radius:50%; display:flex; justify-content:center; align-items:center; font-weight:bold; font-size:12px; cursor:pointer; box-shadow:0 0 10px rgba(76,175,80,0.5);">かう</div>
+                    <div id="shopTabSell" class="shop-tab" style="width:40px; height:40px; background:#555; border:2px solid #777; border-radius:50%; display:flex; justify-content:center; align-items:center; font-weight:bold; font-size:12px; cursor:pointer;">うる</div>
                 </div>
 
-                <!-- 中央ペイン: リスト or スロット -->
                 <div style="flex:1; display:flex; flex-direction:column; background:rgba(0,0,0,0.5); position:relative;">
                     <div id="shopBuyArea" style="flex:1; overflow-y:auto; padding:10px; display:flex; flex-direction:column; gap:5px;"></div>
                     <div id="shopSellArea" style="flex:1; display:none; flex-direction:column;">
-                        <div id="shopCartSlots" style="flex:1; overflow-y:auto; padding:15px; display:grid; grid-template-columns:repeat(4, 1fr); grid-auto-rows:max-content; gap:10px;"></div>
+                        <!-- ★変更: スロットをインベントリと同じ固定サイズ（48px等）ベースで配置 -->
+                        <div id="shopCartSlots" style="flex:1; overflow-y:auto; padding:15px; display:grid; grid-template-columns:repeat(auto-fill, minmax(48px, 1fr)); grid-auto-rows:48px; gap:8px; align-content:start;"></div>
                         <div style="padding:10px; border-top:1px solid #555; background:rgba(20,20,20,0.8); display:flex; justify-content:space-between; align-items:center;">
                             <button id="shopOpenBagBtn" style="padding:8px 12px; background:#336699; color:#fff; border:none; border-radius:4px; font-weight:bold; cursor:pointer;">バッグを開く</button>
                             <div style="font-size:16px; font-weight:bold;">売却額: <span id="shopTotalSellPrice" style="color:#ffd700;">0 G</span></div>
@@ -73,48 +70,46 @@
                     </div>
                 </div>
 
-                <!-- 右ペイン: 詳細と決済 -->
-                <div style="width:250px; background:rgba(30,30,40,0.9); border-left:1px solid #555; padding:15px; box-sizing:border-box; display:flex; flex-direction:column; gap:15px; overflow-y:auto;">
-                    <div id="shopDetailEmpty" style="color:#888; text-align:center; margin-top:50px;">アイテムを選択してください</div>
+                <!-- ★変更: 詳細ペインの幅をスリム化 -->
+                <div style="width:200px; background:rgba(30,30,40,0.9); border-left:1px solid #555; padding:15px; box-sizing:border-box; display:flex; flex-direction:column; gap:15px; overflow-y:auto;">
+                    <div id="shopDetailEmpty" style="color:#888; text-align:center; margin-top:50px; font-size:14px;">アイテムを選択してください</div>
                     
-                    <div id="shopDetailContent" style="display:none; flex-direction:column; gap:15px;">
+                    <div id="shopDetailContent" style="display:none; flex-direction:column; gap:10px;">
                         <div style="display:flex; align-items:center; gap:10px;">
-                            <div id="shopDetailIcon" style="width:40px; height:40px; background:#000; border:1px solid #777; border-radius:4px; display:flex; justify-content:center; align-items:center; font-size:24px;"></div>
-                            <div id="shopDetailName" style="font-weight:bold; font-size:16px;"></div>
+                            <div id="shopDetailIcon" style="width:36px; height:36px; background:#000; border:1px solid #777; border-radius:4px; display:flex; justify-content:center; align-items:center; font-size:20px;"></div>
+                            <div id="shopDetailName" style="font-weight:bold; font-size:14px;"></div>
                         </div>
                         <div id="shopDetailDesc" style="font-size:12px; color:#ccc; line-height:1.4; min-height:40px;"></div>
                         <div style="font-size:14px; color:#ffd700;">単価: <span id="shopDetailUnitPrice">0 G</span></div>
                         
-                        <hr style="border:0; border-top:1px solid #555; width:100%;" />
+                        <hr style="border:0; border-top:1px solid #555; width:100%; margin:5px 0;" />
                         
-                        <!-- 「かう」用の個数選択＆購入エリア -->
                         <div id="shopBuyActionArea" style="display:none; flex-direction:column; gap:10px;">
                             <div id="shopBuyAmountCtrl" style="display:flex; flex-direction:column; gap:5px; background:rgba(0,0,0,0.3); padding:10px; border-radius:4px;">
                                 <div style="display:flex; justify-content:space-between; align-items:center;">
-                                    <button id="shopBuyMinus" style="width:30px; height:30px; background:#555; color:#fff; border:none; border-radius:4px; font-size:18px;">-</button>
+                                    <button id="shopBuyMinus" style="width:28px; height:28px; background:#555; color:#fff; border:none; border-radius:4px; font-size:16px;">-</button>
                                     <span id="shopBuyCountText" style="font-weight:bold; font-size:16px;">1</span>
-                                    <button id="shopBuyPlus" style="width:30px; height:30px; background:#555; color:#fff; border:none; border-radius:4px; font-size:18px;">+</button>
+                                    <button id="shopBuyPlus" style="width:28px; height:28px; background:#555; color:#fff; border:none; border-radius:4px; font-size:16px;">+</button>
                                 </div>
                                 <input type="range" id="shopBuySlider" min="1" max="99" value="1" style="width:100%;">
                             </div>
                             <div style="display:flex; justify-content:space-between; align-items:center; font-weight:bold;">
                                 <span>合計:</span>
-                                <span id="shopBuyTotalPrice" style="color:#ffd700; font-size:16px;">0 G</span>
+                                <span id="shopBuyTotalPrice" style="color:#ffd700; font-size:14px;">0 G</span>
                             </div>
-                            <button id="shopBuyBtn" style="padding:10px; background:#4CAF50; color:#fff; border:none; border-radius:4px; font-weight:bold; font-size:16px; cursor:pointer; margin-top:10px;">購入する</button>
+                            <button id="shopBuyBtn" style="padding:10px; background:#4CAF50; color:#fff; border:none; border-radius:4px; font-weight:bold; font-size:14px; cursor:pointer;">購入する</button>
                         </div>
 
-                        <!-- 「うる」用の詳細＆戻すエリア -->
                         <div id="shopSellActionArea" style="display:none; flex-direction:column; gap:10px;">
-                            <div style="display:flex; justify-content:space-between; align-items:center; font-weight:bold;">
+                            <div style="display:flex; justify-content:space-between; align-items:center; font-weight:bold; font-size:14px;">
                                 <span>売却数:</span>
                                 <span id="shopSellDetailCount">0</span>
                             </div>
-                            <div style="display:flex; justify-content:space-between; align-items:center; font-weight:bold;">
+                            <div style="display:flex; justify-content:space-between; align-items:center; font-weight:bold; font-size:14px;">
                                 <span>小計:</span>
-                                <span id="shopSellDetailTotal" style="color:#ffd700; font-size:16px;">0 G</span>
+                                <span id="shopSellDetailTotal" style="color:#ffd700;">0 G</span>
                             </div>
-                            <button id="shopSellReturnBtn" style="padding:10px; background:#555; color:#fff; border:none; border-radius:4px; font-weight:bold; cursor:pointer; margin-top:10px;">バッグに戻す</button>
+                            <button id="shopSellReturnBtn" style="padding:10px; background:#555; color:#fff; border:none; border-radius:4px; font-weight:bold; font-size:14px; cursor:pointer;">バッグに戻す</button>
                         </div>
                     </div>
                 </div>
@@ -122,7 +117,6 @@
         `;
         document.getElementById('ui-layer').appendChild(shopWin);
 
-        // --- ドラッグ移動 ---
         const titleBar = document.getElementById('shopTitleBar');
         let isDragging = false, startX, startY, initialLeft, initialTop;
         titleBar.addEventListener('pointerdown', (e) => {
@@ -139,7 +133,6 @@
         });
         window.addEventListener('pointerup', () => { isDragging = false; });
 
-        // --- イベントバインド ---
         document.getElementById('shopTabBuy').addEventListener('pointerdown', (e) => { e.stopPropagation(); window.shopState.mode = 'buy'; window.renderShopUI(); });
         document.getElementById('shopTabSell').addEventListener('pointerdown', (e) => { e.stopPropagation(); window.shopState.mode = 'sell'; window.renderShopUI(); });
         document.getElementById('shopCloseBtn').addEventListener('pointerdown', (e) => { e.stopPropagation(); window.closeShopWindow(); });
@@ -148,7 +141,6 @@
             if (window.invWindow && window.invWindow.style.display !== 'flex') { if(typeof window.toggleInventory === 'function') window.toggleInventory(); }
         });
 
-        // --- 購入スライダー ---
         const updateBuyCount = (val) => {
             const itemData = window.ITEM_DB[window.shopState.selectedBuyItemId];
             if (!itemData) return;
@@ -161,7 +153,6 @@
         document.getElementById('shopBuyPlus').onclick = () => updateBuyCount(window.shopState.buyCount + 1);
         document.getElementById('shopBuySlider').oninput = (e) => updateBuyCount(parseInt(e.target.value));
         
-        // --- 決済ボタン ---
         document.getElementById('shopBuyBtn').onclick = () => { if (typeof window.executeShopBuy === 'function') window.executeShopBuy(); };
         document.getElementById('shopSellAllBtn').onclick = () => { if (typeof window.executeShopSellAll === 'function') window.executeShopSellAll(); };
         document.getElementById('shopSellReturnBtn').onclick = () => {
@@ -174,7 +165,6 @@
         };
     };
 
-    // --- カートの残数監視（消費で足りなくなったら外す） ---
     window.validateShopCart = function() {
         let changed = false;
         for (let i = 0; i < window.shopState.cart.length; i++) {
@@ -185,7 +175,6 @@
                     actualItem = window.player.inventory[tab].items.find(it => it.uid === cartItem.item.uid);
                     if (actualItem) break;
                 }
-                // 見つからない、または要求数より少なくなっていればカートから没収
                 if (!actualItem || actualItem.count < cartItem.count) {
                     window.shopState.cart[i] = null;
                     if (window.shopState.selectedSellSlot === i) window.shopState.selectedSellSlot = -1;
@@ -205,19 +194,19 @@
         const shopWin = document.getElementById('shopWindow');
         shopWin.style.display = 'flex';
         if(window.bringToFront) window.bringToFront('shopWindow');
-        if (window.invWindow && window.invWindow.style.display !== 'flex') { if(typeof window.toggleInventory === 'function') window.toggleInventory(); }
+        
+        // ★修正: ショップを開いた瞬間（かうモード）ではインベントリを開かない
         window.renderShopUI();
     };
 
     window.closeShopWindow = function() {
         window.shopState.isOpen = false;
         document.getElementById('shopWindow').style.display = 'none';
-        window.shopState.cart = Array(24).fill(null); // カートリセット
+        window.shopState.cart = Array(24).fill(null); 
         if (window.invWindow && window.invWindow.style.display === 'flex') { if(typeof window.toggleInventory === 'function') window.toggleInventory(); }
         if (typeof window.renderInventory === 'function') window.renderInventory();
     };
 
-    // --- 購入と売却の実行ロジック ---
     window.executeShopBuy = function() {
         if (!window.shopState.selectedBuyItemId) return;
         const itemData = window.ITEM_DB[window.shopState.selectedBuyItemId];
@@ -275,7 +264,6 @@
         }
     };
 
-    // --- メインUIの再描画 ---
     window.renderShopUI = function() {
         if (!window.shopState.isOpen) return;
         document.getElementById('shopPlayerGold').innerText = window.player.gold;
@@ -296,8 +284,8 @@
                 row.style.cssText = `display:flex; align-items:center; gap:10px; padding:8px; background:rgba(255,255,255,0.1); border-radius:4px; cursor:pointer; border:2px solid ${window.shopState.selectedBuyItemId === itemId ? '#4CAF50' : 'transparent'};`;
                 row.innerHTML = `
                     <div style="width:36px; height:36px; background:#000; border:1px solid #777; border-radius:4px; display:flex; justify-content:center; align-items:center; font-size:18px;">${window.getItemIconHTML(itemData)}</div>
-                    <div style="flex:1; font-weight:bold;">${itemData.name}</div>
-                    <div style="color:#ffd700; font-weight:bold;">${itemData.price || 0} G</div>
+                    <div style="flex:1; font-weight:bold; font-size:14px;">${itemData.name}</div>
+                    <div style="color:#ffd700; font-weight:bold; font-size:14px;">${itemData.price || 0} G</div>
                 `;
                 row.onclick = () => { window.shopState.selectedBuyItemId = itemId; window.shopState.buyCount = 1; window.renderShopUI(); };
                 areaBuy.appendChild(row);
@@ -307,6 +295,7 @@
             tabSell.style.background = '#e94560'; tabSell.style.borderColor = '#fff'; tabSell.style.boxShadow = '0 0 10px rgba(233,69,96,0.5)';
             areaBuy.style.display = 'none'; areaSell.style.display = 'flex';
             
+            // ★修正: うるモードを選択した時だけインベントリを自動で開く
             if (window.invWindow && window.invWindow.style.display !== 'flex') { if(typeof window.toggleInventory === 'function') window.toggleInventory(); }
             if (window.bringToFront) window.bringToFront('invWindow');
 
@@ -317,7 +306,8 @@
                 const cartItem = window.shopState.cart[i];
                 const slotDiv = document.createElement('div');
                 slotDiv.className = 'shop-sell-slot'; slotDiv.dataset.slotIdx = i;
-                slotDiv.style.cssText = `width:100%; aspect-ratio:1; background:rgba(255,255,255,0.1); border:2px dashed #666; border-radius:6px; position:relative; box-sizing:border-box; cursor:pointer;`;
+                // ★変更: スロットの枠を固定サイズにして小さくなりすぎないように調整
+                slotDiv.style.cssText = `width:100%; max-width:60px; aspect-ratio:1; background:rgba(255,255,255,0.1); border:2px dashed #666; border-radius:6px; position:relative; box-sizing:border-box; cursor:pointer; margin: 0 auto;`;
                 
                 if (window.shopState.selectedSellSlot === i) { slotDiv.style.borderColor = '#e94560'; slotDiv.style.borderStyle = 'solid'; }
 
@@ -347,7 +337,6 @@
             document.getElementById('shopTotalSellPrice').innerText = `${totalSellPrice} G`;
         }
 
-        // --- 右ペインの更新 ---
         const detailEmpty = document.getElementById('shopDetailEmpty');
         const detailContent = document.getElementById('shopDetailContent');
 
@@ -382,7 +371,6 @@
         }
     };
 
-    // --- 売却時の個数選択ポップアップ ---
     window.promptShopSellCount = function(item, slotIdx) {
         if (!item) return;
         let modal = document.getElementById('shopSellCountModal');

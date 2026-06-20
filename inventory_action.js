@@ -10,14 +10,9 @@ window.initInventoryUI = function() {
     const invContent = document.getElementById('invContent');
     const itemDetail = document.getElementById('itemDetail');
 
-    // =========================================================
-    // ★変更: プレイヤーの有無に関わらず、DOMへのイベント登録は最初に行う
-    // (二重登録を防ぐためフラグで管理)
-    // =========================================================
     if (!window.__invDOMEventsRegistered) {
         window.__invDOMEventsRegistered = true;
 
-        // --- バッグ開閉ボタン ---
         document.getElementById('bagBtn').addEventListener('pointerdown', (e) => { 
             e.stopPropagation(); 
             if(typeof window.toggleInventory === 'function') window.toggleInventory(); 
@@ -28,7 +23,6 @@ window.initInventoryUI = function() {
             if(typeof window.toggleInventory === 'function') window.toggleInventory(); 
         });
 
-        // --- ウィンドウのドラッグ移動 ---
         let isDraggingInv = false; 
         let dragOffsetX = 0; 
         let dragOffsetY = 0;
@@ -62,7 +56,6 @@ window.initInventoryUI = function() {
                     dragGhost.style.top = (e.clientY - 22) + 'px';
                 }
                 
-                // ドラッグ中の自動スクロール判定
                 if (window.invWindow && window.invWindow.style.display === 'flex') {
                     window.checkAutoScroll(e.clientY);
                 }
@@ -95,22 +88,41 @@ window.initInventoryUI = function() {
 
                 if (dropTarget) {
                     // =========================================================
-                    // ★追加: ショップ売却スロットへのドロップ判定
+                    // ★変更: ショップウィンドウ全体へのドロップ判定 (ファジー判定)
+                    // スロットからズレていても、空いている枠に自動で登録します
                     // =========================================================
-                    const shopSlot = dropTarget.closest('.shop-sell-slot');
-                    if (shopSlot && window.shopState && window.shopState.isOpen && window.shopState.mode === 'sell') {
-                        const slotIdx = parseInt(shopSlot.dataset.slotIdx);
-                        if (typeof window.promptShopSellCount === 'function') {
-                            window.promptShopSellCount(window.dragState.item, slotIdx);
+                    const shopWin = dropTarget.closest('#shopWindow');
+                    if (shopWin && window.shopState && window.shopState.isOpen && window.shopState.mode === 'sell') {
+                        let targetSlotIdx = -1;
+                        
+                        // もし特定のスロットの上に落としたならその枠を指定
+                        const shopSlot = dropTarget.closest('.shop-sell-slot');
+                        if (shopSlot) {
+                            targetSlotIdx = parseInt(shopSlot.dataset.slotIdx);
+                        } else {
+                            // ウィンドウの適当な場所に落とした場合は、最初の空き枠を探す
+                            for (let i = 0; i < window.shopState.cart.length; i++) {
+                                if (!window.shopState.cart[i]) {
+                                    targetSlotIdx = i;
+                                    break;
+                                }
+                            }
                         }
+
+                        if (targetSlotIdx !== -1) {
+                            if (typeof window.promptShopSellCount === 'function') {
+                                window.promptShopSellCount(window.dragState.item, targetSlotIdx);
+                            }
+                        } else {
+                            if(typeof window.addLog === 'function') window.addLog("<span class='color-sys'>売却カートがいっぱいです。</span>", "sys");
+                        }
+                        
                         if (typeof window.renderInventory === 'function') window.renderInventory();
                         window.justDropped = true;
                         if(typeof window.onItemDragEnd === 'function') window.onItemDragEnd(dropTarget);
                         return;
                     }
 
-                    // --- 既存の処理 ---
-                    // 先に外部モジュール（ショートカット等）のドロップ判定を呼ぶ
                     if (typeof window.onItemDragEnd === 'function') {
                         const handledByOuter = window.onItemDragEnd(dropTarget);
                         if (handledByOuter) {
@@ -120,7 +132,6 @@ window.initInventoryUI = function() {
                         }
                     }
 
-                    // インベントリ内の並び替え処理
                     const targetSlot = dropTarget.closest('.inv-slot');
                     if (targetSlot) {
                         const targetIdx = parseInt(targetSlot.dataset.index);
@@ -144,7 +155,6 @@ window.initInventoryUI = function() {
             }
         });
 
-        // インベントリ内タップ時の前面化と詳細閉じ
         window.invWindow.addEventListener('pointerdown', (e) => {
             if(window.bringToFront) window.bringToFront('invWindow');
             e.stopPropagation();
@@ -153,7 +163,6 @@ window.initInventoryUI = function() {
             }
         });
 
-        // --- 「使う/装備/はずす」ボタンの処理 ---
         document.getElementById('btnUseEquip').addEventListener('pointerdown', (e) => {
             e.stopPropagation();
             const btn = e.target;
@@ -162,7 +171,6 @@ window.initInventoryUI = function() {
 
             if (!item) return;
 
-            // スキルチップ素材の場合のフック
             if (btn.dataset.isChip === "true") {
                 if(typeof window.openSkillCreateFromItem === 'function') {
                     window.openSkillCreateFromItem(item);
@@ -171,7 +179,6 @@ window.initInventoryUI = function() {
                 return;
             }
             
-            // スキルの場合のフック
             if (btn.dataset.isSkill === "true") {
                 if(typeof window.executeSkill === 'function') {
                     window.executeSkill(item);
@@ -195,7 +202,6 @@ window.initInventoryUI = function() {
                 }
                 if (typeof window.updatePlayerStats === 'function') window.updatePlayerStats();
             } else if (item.type === 'consume') {
-                // クールタイム中なら使用不可
                 if (window.itemCooldowns[item.id] > 0) return;
 
                 if (item.restore) {
@@ -210,7 +216,6 @@ window.initInventoryUI = function() {
                     }
                 }
                 
-                // アイテム固有のCTをセット (2秒)
                 window.itemCooldowns[item.id] = 2.0;
                 window.itemMaxCooldowns[item.id] = 2.0;
 
@@ -248,9 +253,6 @@ window.toggleInventory = function() {
     }
 };
 
-// ==========================================
-// ドラッグ中の自動スクロール判定
-// ==========================================
 window.checkAutoScroll = function(y) {
     const invContent = document.getElementById('invContent');
     if (window.invWindow.style.display !== 'flex' || !invContent) return;
@@ -283,7 +285,6 @@ window.stopAutoScroll = function() {
     }
 };
 
-// --- アイテム取得のオーバーライド処理 (所持枠いっぱい時のログ追加) ---
 const origAddItemToInventory = window.addItemToInventory;
 window.addItemToInventory = function(item) {
     const added = origAddItemToInventory ? origAddItemToInventory(item) : false;
@@ -291,7 +292,6 @@ window.addItemToInventory = function(item) {
         if (typeof window.addLog === 'function') {
             window.addLog(`<span class='color-sys'>インベントリがいっぱいで ${item.name} を拾えなかった。</span>`, 'sys');
         }
-        // スタック防止のためターゲットを解除
         if (window.player && window.player.targetItem && window.player.targetItem.uid === item.uid) {
             window.player.targetItem = null;
             window.playerPath = [];
