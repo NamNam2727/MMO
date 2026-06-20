@@ -227,7 +227,7 @@ window.MapManager.mapDataStore['town'] = {
         1: { type: 'warp', targetMap: 'worldMap', targetId: 2 , icon: '⤴️'}, // ワールドマップへ移動
         2: { type: 'spawn' },                                    // ワールドマップから戻ってきた時の着地点
         9: { type: 'spawn', isDefaultSpawn: true }               // ゲーム開始時の初期スポーン地点
-    }
+    },
 
 ==========================================
     // 3層目用の定義リスト (敵やNPCのスポーン)
