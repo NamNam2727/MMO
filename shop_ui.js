@@ -25,23 +25,10 @@
     };
 
     window.initShopUI = function() {
-        // ★修正1: オーバーレイのz-indexを「5」に設定。インベントリ(z-index:10)より必ず背面に配置されます。
-        const overlay = document.createElement('div');
-        overlay.id = 'shopOverlay';
-        overlay.style.cssText = 'position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); z-index:5; display:none; justify-content:center; align-items:center; pointer-events:auto; touch-action:none;';
-
         const shopWin = document.createElement('div');
         shopWin.id = 'shopWindow';
-        // z-index指定やbringToFrontを無くし、常にオーバーレイ(z-index:5)に従属させます
-        shopWin.style.cssText = 'position:relative; display:flex; flex-direction:column; width:95vw; max-width:850px; height:85vh; max-height:600px; background:rgba(20,20,30,0.95); border:2px solid #aaa; border-radius:8px; color:#fff; pointer-events:auto; box-shadow:0 10px 30px rgba(0,0,0,0.9);';
-        
-        // 枠外タップによる移動防止とウィンドウ閉じる処理
-        overlay.addEventListener('pointerdown', (e) => {
-            if (e.target === overlay) {
-                e.stopPropagation();
-                window.closeShopWindow();
-            }
-        });
+        // ★修正: オーバーレイを使わず、z-index: 10（インベントリより基本背面）に固定。移動処理も削除し中央配置。
+        shopWin.style.cssText = 'position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); display:none; flex-direction:column; width:95vw; max-width:850px; height:85vh; max-height:600px; background:rgba(20,20,30,0.95); border:2px solid #aaa; border-radius:8px; z-index:10; color:#fff; pointer-events:auto; touch-action:none; box-shadow:0 10px 30px rgba(0,0,0,0.9);';
 
         shopWin.innerHTML = `
             <div id="shopTitleBar" style="padding:10px; background:linear-gradient(to right, #445, #223); border-bottom:1px solid #777; border-radius:6px 6px 0 0; display:flex; justify-content:space-between; align-items:center;">
@@ -63,24 +50,29 @@
                     <div id="shopBuyArea" style="flex:1; overflow-y:auto; padding:10px; display:flex; flex-direction:column; gap:5px;"></div>
                     
                     <div id="shopSellArea" style="flex:1; display:none; flex-direction:column;">
+                        <!-- 中央ペインの枠を拡張（インベントリと同じ4マスのまま幅を広く） -->
                         <div id="shopCartSlots" style="flex:1; overflow-y:auto; padding:10px; display:grid; grid-template-columns:repeat(4, 1fr); grid-auto-rows:max-content; gap:5px; align-content:start;"></div>
                         
                         <div style="padding:10px; border-top:1px solid #555; background:rgba(20,20,20,0.8); display:flex; justify-content:space-between; align-items:center;">
                             <button id="shopOpenBagBtn" style="padding:8px 12px; background:#336699; color:#fff; border:none; border-radius:4px; font-weight:bold; cursor:pointer;">バッグを開く</button>
-                            <!-- ★修正2: 売却額を縦並びに修正 -->
+                            
+                            <!-- ★変更: 売却額を縦並びに -->
                             <div style="display:flex; flex-direction:column; align-items:center; font-weight:bold;">
                                 <span style="font-size:12px; color:#fff;">売却額:</span>
                                 <span id="shopTotalSellPrice" style="color:#ffd700; font-size:16px;">0 G</span>
                             </div>
+                            
                             <button id="shopSellAllBtn" style="padding:8px 16px; background:#e94560; color:#fff; border:none; border-radius:4px; font-weight:bold; cursor:pointer;">全て売る</button>
                         </div>
                     </div>
                 </div>
 
+                <!-- ★変更: 詳細ペインを100pxに大幅スリム化 -->
                 <div style="width:100px; background:rgba(30,30,40,0.9); border-left:1px solid #555; padding:10px; box-sizing:border-box; display:flex; flex-direction:column; gap:10px; overflow-y:auto;">
                     <div id="shopDetailEmpty" style="color:#888; text-align:center; margin-top:50px; font-size:12px;">アイテムを選択</div>
                     
                     <div id="shopDetailContent" style="display:none; flex-direction:column; gap:10px;">
+                        <!-- ★変更: 一番上にアイコン、その下に名前の縦並び -->
                         <div style="display:flex; flex-direction:column; align-items:center; gap:5px;">
                             <div id="shopDetailIcon" style="width:44px; height:44px; background:#000; border:1px solid #777; border-radius:4px; display:flex; justify-content:center; align-items:center; font-size:20px;"></div>
                             <div id="shopDetailName" style="font-weight:bold; font-size:12px; text-align:center; word-break:break-all;"></div>
@@ -123,8 +115,34 @@
             </div>
         `;
         
-        overlay.appendChild(shopWin);
-        document.getElementById('ui-layer').appendChild(overlay);
+        document.getElementById('ui-layer').appendChild(shopWin);
+
+        // ★修正: オーバーレイを使わず、一番最初に「枠外タップ判定」を拾って確実に防ぐ処理
+        document.addEventListener('pointerdown', (e) => {
+            if (!window.shopState || !window.shopState.isOpen) return;
+
+            // 各種UIのどれかをタップしているならセーフ
+            const isUI = e.target.closest('#shopWindow, #invWindow, #itemDetail, #statusWindow, #shopSellCountModal, .shop-tab, #playerWidget, #bottomUIContainer, #chatLogContent, #fullLogContent');
+            
+            if (!isUI) {
+                // UI以外（枠外のマップやNPCなど）を触った場合、全ての操作をキャンセルして閉じる
+                e.stopPropagation();
+                e.preventDefault();
+                
+                window.closeShopWindow(); // ❌ボタンと同じ閉じる処理
+                
+                // キャラの移動とNPC会話の再起動を完全にブロック
+                if (window.player) {
+                    window.player.targetNpc = null;
+                    window.player.targetEnemy = null;
+                    window.player.targetItem = null;
+                    window.playerPath = [];
+                }
+                if (typeof input !== 'undefined') {
+                    input.isDown = false;
+                }
+            }
+        }, { capture: true }); // 他のクリック判定より先に横取りする
 
         document.getElementById('shopTabBuy').addEventListener('pointerdown', (e) => { e.stopPropagation(); window.shopState.mode = 'buy'; window.renderShopUI(); });
         document.getElementById('shopTabSell').addEventListener('pointerdown', (e) => { e.stopPropagation(); window.shopState.mode = 'sell'; window.renderShopUI(); });
@@ -132,6 +150,7 @@
         document.getElementById('shopOpenBagBtn').addEventListener('pointerdown', (e) => {
             e.stopPropagation();
             if (window.invWindow && window.invWindow.style.display !== 'flex') { if(typeof window.toggleInventory === 'function') window.toggleInventory(); }
+            if (window.bringToFront) window.bringToFront('invWindow');
         });
 
         const updateBuyCount = (val) => {
@@ -145,7 +164,7 @@
         document.getElementById('shopBuyMinus').onclick = () => updateBuyCount(window.shopState.buyCount - 1);
         document.getElementById('shopBuyPlus').onclick = () => updateBuyCount(window.shopState.buyCount + 1);
         
-        // ★修正3: スライダーの操作干渉をブロックし、正常にドラッグ可能にする
+        // ★修正: スライダーの操作干渉をブロックし、正常にドラッグ可能にする
         const buySlider = document.getElementById('shopBuySlider');
         buySlider.oninput = (e) => updateBuyCount(parseInt(e.target.value));
         buySlider.addEventListener('touchmove', (e) => e.stopPropagation(), {passive: true});
@@ -189,15 +208,15 @@
         window.shopState.selectedBuyItemId = null; window.shopState.selectedSellSlot = -1;
         document.getElementById('shopNpcName').innerText = npc.name;
         
-        const overlay = document.getElementById('shopOverlay');
-        overlay.style.display = 'flex';
+        const shopWin = document.getElementById('shopWindow');
+        shopWin.style.display = 'flex';
         
         window.renderShopUI();
     };
 
     window.closeShopWindow = function() {
         window.shopState.isOpen = false;
-        document.getElementById('shopOverlay').style.display = 'none';
+        document.getElementById('shopWindow').style.display = 'none';
         window.shopState.cart = Array(24).fill(null); 
         if (window.invWindow && window.invWindow.style.display === 'flex') { if(typeof window.toggleInventory === 'function') window.toggleInventory(); }
         if (typeof window.renderInventory === 'function') window.renderInventory();
@@ -409,7 +428,7 @@
         document.getElementById('shopSellCountMinus').onclick = () => updateVal(currentVal - 1);
         document.getElementById('shopSellCountPlus').onclick = () => updateVal(currentVal + 1);
         
-        // ★修正3: スライダーの操作干渉をブロックし、正常にドラッグ可能にする
+        // ★修正: スライダーの操作干渉をブロックし、正常にドラッグ可能にする
         const sellSlider = document.getElementById('shopSellCountSlider');
         sellSlider.oninput = (e) => updateVal(parseInt(e.target.value));
         sellSlider.addEventListener('touchmove', (e) => e.stopPropagation(), {passive: true});
