@@ -27,12 +27,16 @@
     window.initShopUI = function() {
         const shopWin = document.createElement('div');
         shopWin.id = 'shopWindow';
-        // ★修正: z-indexを15に設定。ステータスよりは手前、インベントリ(タップ後)より奥を維持します。
-        shopWin.style.cssText = 'position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); display:none; flex-direction:column; width:95vw; max-width:850px; height:85vh; max-height:600px; background:rgba(20,20,30,0.95); border:2px solid #aaa; border-radius:8px; z-index:15; color:#fff; pointer-events:auto; touch-action:none; box-shadow:0 10px 30px rgba(0,0,0,0.9);';
+        // ★修正: z-indexを「75」に設定。これでz-index:70のステータスウィンドウより確実に手前に表示されます。
+        shopWin.style.cssText = 'position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); display:none; flex-direction:column; width:95vw; max-width:850px; height:85vh; max-height:600px; background:rgba(20,20,30,0.95); border:2px solid #aaa; border-radius:8px; z-index:75; color:#fff; pointer-events:auto; touch-action:none; box-shadow:0 10px 30px rgba(0,0,0,0.9);';
         
-        // ★修正: ウィンドウ内のタップが背景に貫通するのを防ぐ。※前面化(bringToFront)は呼ばないのでインベントリは隠れません。
-        shopWin.addEventListener('pointerdown', (e) => e.stopPropagation());
-        shopWin.addEventListener('pointerup', (e) => e.stopPropagation());
+        // ★修正: ウィンドウ内のタップが背面のマップに貫通するのを防ぐ
+        shopWin.addEventListener('pointerdown', (e) => {
+            e.stopPropagation(); // 貫通防止
+            if(window.bringToFront) window.bringToFront('shopWindow');
+        });
+        
+        // 【最重要修正】 pointerup の stopPropagation は D&D を破壊するため絶対に書かない！！！
 
         shopWin.innerHTML = `
             <div id="shopTitleBar" style="padding:10px; background:linear-gradient(to right, #445, #223); border-bottom:1px solid #777; border-radius:6px 6px 0 0; display:flex; justify-content:space-between; align-items:center;">
@@ -137,7 +141,7 @@
         document.getElementById('shopBuyMinus').onclick = () => updateBuyCount(window.shopState.buyCount - 1);
         document.getElementById('shopBuyPlus').onclick = () => updateBuyCount(window.shopState.buyCount + 1);
         
-        // ★修正: スライダーに対する一切のイベント干渉をブロックし、快適にドラッグできるようにする
+        // スライダーに対するイベント干渉をブロックし、快適にドラッグできるようにする
         const buySlider = document.getElementById('shopBuySlider');
         buySlider.oninput = (e) => updateBuyCount(parseInt(e.target.value));
         buySlider.addEventListener('pointerdown', (e) => e.stopPropagation());
@@ -186,6 +190,8 @@
         const shopWin = document.getElementById('shopWindow');
         shopWin.style.display = 'flex';
         
+        if(window.bringToFront) window.bringToFront('shopWindow');
+        
         window.renderShopUI();
     };
 
@@ -194,10 +200,8 @@
         document.getElementById('shopWindow').style.display = 'none';
         window.shopState.cart = Array(24).fill(null); 
         
-        // 閉じた瞬間に安全のためターゲットクリア
         if (window.player) {
             window.player.targetNpc = null;
-            window.playerPath = [];
         }
 
         if (window.invWindow && window.invWindow.style.display === 'flex') { if(typeof window.toggleInventory === 'function') window.toggleInventory(); }
@@ -415,7 +419,6 @@
         document.getElementById('shopSellCountMinus').onclick = () => updateVal(currentVal - 1);
         document.getElementById('shopSellCountPlus').onclick = () => updateVal(currentVal + 1);
         
-        // ★修正: スライダーに対するイベント干渉をすべてブロック
         const sellSlider = document.getElementById('shopSellCountSlider');
         sellSlider.oninput = (e) => updateVal(parseInt(e.target.value));
         sellSlider.addEventListener('pointerdown', (e) => e.stopPropagation());

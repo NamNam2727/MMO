@@ -37,31 +37,74 @@
     };
 
     // ----------------------------------------------------------------------
-    // 2. 枠外タップ時の閉じる処理とNPCへのタップ判定を統合
-    // ★修正: 閉じた直後に会話が再起動してしまうバグをここで防ぎます
+    // 2. UIの前面・背面管理（bringToFront）にショップを組み込むパッチ
+    // ★修正: ショップ(75) < インベントリ(80) < 個数選択(85) の順になるように調整
     // ----------------------------------------------------------------------
-    window.addEventListener('pointerup', (e) => {
-        // UI操作のタップ時は無視
-        if (e.target.closest('#invWindow, #itemDetail, #statusWindow, #shopSellCountModal, button, input, .shop-tab')) return;
-        
-        // --- ショップが開いている時の枠外タップ判定 ---
+    const initBringToFrontHook = setInterval(() => {
+        if (typeof window.bringToFront === 'function') {
+            clearInterval(initBringToFrontHook);
+            const origBringToFront = window.bringToFront;
+            
+            window.bringToFront = function(windowId) {
+                origBringToFront(windowId); 
+                
+                const shopWin = document.getElementById('shopWindow');
+                const shopModal = document.getElementById('shopSellCountModal');
+                const invWin = document.getElementById('invWindow');
+                
+                // ベースのZ-index（ステータスの70より上に配置）
+                if (shopWin) shopWin.style.zIndex = 75;
+                if (shopModal) shopModal.style.zIndex = 85;
+                
+                // タップされたものを最前面にするが、ショップはインベントリを超えないようにする
+                if (windowId === 'shopWindow' && shopWin) shopWin.style.zIndex = 76;
+                if (windowId === 'shopSellCountModal' && shopModal) shopModal.style.zIndex = 86;
+                
+                // インベントリはショップより確実に手前に来るように補正
+                if (windowId === 'invWindow' && invWin) {
+                    invWin.style.zIndex = 80;
+                }
+                
+                // 詳細ウィンドウは一番手前
+                const detail = document.getElementById('itemDetail');
+                if (detail && detail.style.display === 'flex') detail.style.zIndex = 90;
+            };
+        }
+    }, 100);
+
+    // ----------------------------------------------------------------------
+    // 3. 枠外タップ時の【完全な】閉じる処理 ＆ キャラ移動防止
+    // ★修正: イベントのキャプチャフェーズで横取りし、キャラが動くのを完全にブロックします
+    // ----------------------------------------------------------------------
+    document.addEventListener('pointerdown', (e) => {
         if (window.shopState && window.shopState.isOpen) {
-            const isShopWin = e.target.closest('#shopWindow');
-            if (!isShopWin) {
-                // ショップウィンドウ外ならショップを閉じ、ターゲットを強制解除
+            const isUI = e.target.closest('#shopWindow, #invWindow, #itemDetail, #statusWindow, #shopSellCountModal, .shop-tab, #playerWidget, #bottomUIContainer, #chatLogContent, #fullLogContent');
+            
+            // UI以外（背景のマップやNPCなど）をタップした場合
+            if (!isUI) {
+                e.stopPropagation(); // これで main.js へのタップ伝播を完全に遮断（キャラ移動防止）
+                e.preventDefault();
+                
                 if (typeof window.closeShopWindow === 'function') window.closeShopWindow();
+                
                 if (window.player) {
                     window.player.targetNpc = null;
                     window.player.targetEnemy = null;
                     window.player.targetItem = null;
                     window.playerPath = [];
                 }
-                return; // ここで終了し、下のNPC判定には進ませない
+                if (typeof input !== 'undefined') input.isDown = false;
             }
-            return; // ショップ内タップなら通常通り終了
         }
+    }, { capture: true }); 
 
-        // --- 以下は通常のNPCタップ判定 ---
+    // ----------------------------------------------------------------------
+    // 4. NPCへの通常のタップ判定
+    // ----------------------------------------------------------------------
+    window.addEventListener('pointerup', (e) => {
+        if (e.target.closest('#invWindow, #itemDetail, #statusWindow, #shopWindow, #shopSellCountModal, button, input, .shop-tab')) return;
+        if (window.shopState && window.shopState.isOpen) return; // 開いている時は判定しない
+        
         if (!window.player || !window.camera || window.isMapLoading) return;
         
         const sx = (typeof input !== 'undefined') ? input.screenX : e.clientX;
@@ -88,7 +131,7 @@
     });
 
     // ----------------------------------------------------------------------
-    // 3. NPCへの接近と会話
+    // 5. NPCへの接近と会話
     // ----------------------------------------------------------------------
     const initLoopHook = setInterval(() => {
         if (window.gameLoop) {
@@ -105,7 +148,7 @@
                     if (dist <= window.player.attackRange + 20) {
                         window.playerPath = []; 
                         if (npc.interact) npc.interact(npc, window.player);
-                        window.player.targetNpc = null; // 会話したらターゲット解除
+                        window.player.targetNpc = null;
                     }
                 }
             };
@@ -113,7 +156,7 @@
     }, 100);
 
     // ----------------------------------------------------------------------
-    // 4. インベントリ描画時の「半透明化」をフック
+    // 6. インベントリ描画時の「半透明化」をフック
     // ----------------------------------------------------------------------
     const initInvHook = setInterval(() => {
         if (typeof window.renderInventory === 'function') {
@@ -149,57 +192,38 @@
     }, 100);
 
     // ----------------------------------------------------------------------
-    // 5. インベントリからのD&D売却判定
-    // ★修正: z-index（背面化）に影響されないよう、座標計算による完全な判定に変更
+    // 7. インベントリからのD&D売却判定
+    // ★修正: pointerupのバグを取り除いたので、一番シンプルな本来の判定に戻しました
     // ----------------------------------------------------------------------
     setTimeout(() => {
         const originalOnItemDragEnd = window.onItemDragEnd;
         
         window.onItemDragEnd = function(dropTarget) {
-            if (window.shopState && window.shopState.isOpen && window.shopState.mode === 'sell') {
-                const shopWin = document.getElementById('shopWindow');
+            const shopWin = dropTarget ? dropTarget.closest('#shopWindow') : null;
+            
+            if (shopWin && window.shopState && window.shopState.isOpen && window.shopState.mode === 'sell') {
+                let targetSlotIdx = -1;
+                const shopSlot = dropTarget.closest('.shop-sell-slot');
                 
-                if (shopWin) {
-                    // 指を離した座標が、ショップウィンドウの領域内にあるか計算で判定
-                    const rect = shopWin.getBoundingClientRect();
-                    const dropX = window.lastDragX;
-                    const dropY = window.lastDragY;
-                    
-                    if (dropX >= rect.left && dropX <= rect.right && dropY >= rect.top && dropY <= rect.bottom) {
-                        let targetSlotIdx = -1;
-                        const slots = shopWin.querySelectorAll('.shop-sell-slot');
-                        
-                        // 具体的にどの枠に落としたか座標でチェック
-                        for (let i = 0; i < slots.length; i++) {
-                            const sRect = slots[i].getBoundingClientRect();
-                            if (dropX >= sRect.left && dropX <= sRect.right && dropY >= sRect.top && dropY <= sRect.bottom) {
-                                targetSlotIdx = parseInt(slots[i].dataset.slotIdx);
-                                break;
-                            }
-                        }
-
-                        // スロット外だがウィンドウ内の場合は、最初の空き枠を探す
-                        if (targetSlotIdx === -1) {
-                            for (let i = 0; i < window.shopState.cart.length; i++) {
-                                if (!window.shopState.cart[i]) { targetSlotIdx = i; break; }
-                            }
-                        }
-
-                        // 枠が見つかったら個数選択ポップアップを出す
-                        if (targetSlotIdx !== -1) {
-                            if (typeof window.promptShopSellCount === 'function') {
-                                window.promptShopSellCount(window.dragState.item, targetSlotIdx);
-                            }
-                        } else {
-                            if (typeof window.addLog === 'function') window.addLog("<span class='color-sys'>売却カートがいっぱいです。</span>", "sys");
-                        }
-                        
-                        return true; // 処理を横取りしたのでtrue
+                if (shopSlot) {
+                    targetSlotIdx = parseInt(shopSlot.dataset.slotIdx);
+                } else {
+                    for (let i = 0; i < window.shopState.cart.length; i++) {
+                        if (!window.shopState.cart[i]) { targetSlotIdx = i; break; }
                     }
                 }
+
+                if (targetSlotIdx !== -1) {
+                    if (typeof window.promptShopSellCount === 'function') {
+                        window.promptShopSellCount(window.dragState.item, targetSlotIdx);
+                    }
+                } else {
+                    if (typeof window.addLog === 'function') window.addLog("<span class='color-sys'>売却カートがいっぱいです。</span>", "sys");
+                }
+                return true; 
             }
             
-            // 座標計算でショップ外だった場合は、元のドロップ処理（床に置く等）を実行
+            // ショップじゃない場所に落としたら、通常のショートカット等（または床）の処理へ戻す
             if (typeof originalOnItemDragEnd === 'function') {
                 return originalOnItemDragEnd(dropTarget);
             }
@@ -208,7 +232,7 @@
     }, 2000); 
 
     // ----------------------------------------------------------------------
-    // 6. ショップウィンドウのスクロール操作の許可
+    // 8. ショップウィンドウのスクロール操作の許可
     // ----------------------------------------------------------------------
     document.addEventListener('touchmove', function(e) {
         if (window.isDraggingItem) return;
