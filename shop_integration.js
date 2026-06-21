@@ -5,7 +5,7 @@
 
 (function() {
     // ----------------------------------------------------------------------
-    // 1. NPCを誕生させる機能の追加 (entities.js を汚染しないための措置)
+    // 1. NPCを誕生させる機能の追加
     // ----------------------------------------------------------------------
     window.npcs = window.npcs || [];
 
@@ -37,10 +37,9 @@
     };
 
     // ----------------------------------------------------------------------
-    // 2. NPCへのタップ判定（main.js のクリック処理に相乗りする）
+    // 2. NPCへのタップ判定
     // ----------------------------------------------------------------------
     window.addEventListener('pointerup', (e) => {
-        // UI操作のタップ時は無視
         if (e.target.closest('#invWindow, #itemDetail, #statusWindow, #shopWindow, #shopSellCountModal, button, input')) return;
         
         if (!window.player || !window.camera || window.isMapLoading) return;
@@ -67,7 +66,7 @@
     });
 
     // ----------------------------------------------------------------------
-    // 3. NPCへの接近と会話（gameLoop を汚染せずに追加）
+    // 3. NPCへの接近と会話
     // ----------------------------------------------------------------------
     const initLoopHook = setInterval(() => {
         if (window.gameLoop) {
@@ -130,12 +129,9 @@
     // ----------------------------------------------------------------------
     // 5. インベントリからのD&D売却判定
     // ----------------------------------------------------------------------
-    let originalOnItemDragEnd = null;
-    const initDragHook = setInterval(() => {
-        if (typeof window.onItemDragEnd !== 'undefined') {
-            originalOnItemDragEnd = window.onItemDragEnd;
-        }
-        clearInterval(initDragHook);
+    // ★修正4: shortcut.jsのロード後に確実にドロップ判定を上書きし、消滅を防ぐ
+    setTimeout(() => {
+        const originalOnItemDragEnd = window.onItemDragEnd;
         
         window.onItemDragEnd = function(dropTarget) {
             const shopWin = dropTarget.closest('#shopWindow');
@@ -147,6 +143,7 @@
                 if (shopSlot) {
                     targetSlotIdx = parseInt(shopSlot.dataset.slotIdx);
                 } else {
+                    // スロット外でもウィンドウ内なら適当な空き枠を探す
                     for (let i = 0; i < window.shopState.cart.length; i++) {
                         if (!window.shopState.cart[i]) { targetSlotIdx = i; break; }
                     }
@@ -162,12 +159,13 @@
                 return true; 
             }
             
+            // 元の（ショートカット用の）D&D処理を呼び出す
             if (typeof originalOnItemDragEnd === 'function') {
                 return originalOnItemDragEnd(dropTarget);
             }
             return false;
         };
-    }, 100);
+    }, 2000); // 2秒遅らせて確実に最後に適用する
 
     // ----------------------------------------------------------------------
     // 6. ショップウィンドウのスクロール操作の許可
