@@ -378,10 +378,12 @@ window.GameRenderer = (function() {
             if (window.playerPath.length > 0 && !pIsFrozen) {
                 ctx.beginPath(); ctx.moveTo(window.player.x, window.player.y);
                 for (const wp of window.playerPath) ctx.lineTo(wp.x, wp.y);
+                
                 // ★修正: NPCをターゲットしている時も緑色の線で結ぶ
                 if (window.player.targetItem || window.player.targetNpc) { ctx.strokeStyle = 'rgba(0, 255, 0, 0.4)'; } 
                 else { ctx.strokeStyle = window.player.isAutoAttacking ? 'rgba(255, 100, 100, 0.4)' : 'rgba(0, 255, 255, 0.4)'; }
                 ctx.lineWidth = 2; ctx.setLineDash([5, 5]); ctx.stroke(); ctx.setLineDash([]);
+                
                 const lastWp = window.playerPath[window.playerPath.length - 1];
                 ctx.beginPath(); ctx.arc(lastWp.x, lastWp.y, 5, 0, Math.PI * 2); 
                 if (window.player.targetItem || window.player.targetNpc) ctx.fillStyle = 'rgba(0, 255, 0, 0.6)';

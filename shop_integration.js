@@ -5,53 +5,36 @@
 
 (function() {
     // ----------------------------------------------------------------------
-    // 1. NPCの姿を描画するフック（renderer.js を汚染せずに追加）
+    // 1. NPCを誕生させる機能の追加 (entities.js を汚染しないための措置)
     // ----------------------------------------------------------------------
-    const initDrawHook = setInterval(() => {
-        if (window.GameRenderer && window.GameRenderer.draw) {
-            clearInterval(initDrawHook);
-            const origDraw = window.GameRenderer.draw;
-            
-            window.GameRenderer.draw = function() {
-                origDraw(); // 元の完璧な描画処理をそのまま実行
-                
-                // その後、上に被せるようにNPCだけを追加描画する
-                if (window.ctx && window.npcs && !window.isMapLoading) {
-                    const ctx = window.ctx;
-                    ctx.save();
-                    ctx.translate(-window.camera.x, -window.camera.y);
-                    
-                    for (const npc of window.npcs) {
-                        // タップ時のハイライト
-                        if (window.player && window.player.targetNpc === npc) {
-                            ctx.beginPath(); ctx.ellipse(npc.x, npc.y + npc.radius, npc.radius * 1.5, npc.radius * 0.5, 0, 0, Math.PI * 2);
-                            ctx.strokeStyle = '#00ff00'; ctx.lineWidth = 2; ctx.stroke();
-                            ctx.fillStyle = 'rgba(0, 255, 0, 0.2)'; ctx.fill();
-                        }
+    window.npcs = window.npcs || [];
 
-                        // NPC本体
-                        if (npc.image && npc.image.complete && npc.image.naturalWidth > 0) {
-                            ctx.drawImage(npc.image, npc.x - npc.radius, npc.y - npc.radius, npc.radius * 2, npc.radius * 2);
-                        } else {
-                            ctx.beginPath(); ctx.arc(npc.x, npc.y, npc.radius, 0, Math.PI * 2);
-                            ctx.fillStyle = npc.color; ctx.fill();
-                            ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke();
-                        }
+    window.spawnNPC = function(npcId, spawnX, spawnY) {
+        if (!window.NPC_DB || !window.NPC_DB[npcId]) return null;
+        
+        const base = window.NPC_DB[npcId];
+        const radius = base.radius || 15;
 
-                        // NPCの名前とアイコン
-                        ctx.font = 'bold 12px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
-                        ctx.lineWidth = 2; ctx.strokeStyle = '#000';
-                        ctx.strokeText(npc.name, npc.x, npc.y + npc.radius + 4);
-                        ctx.fillStyle = '#aaffaa'; ctx.fillText(npc.name, npc.x, npc.y + npc.radius + 4);
-                        
-                        const bounce = Math.sin(performance.now() / 200) * 3;
-                        ctx.font = '16px sans-serif'; ctx.fillText('💬', npc.x, npc.y - npc.radius - 20 + bounce);
-                    }
-                    ctx.restore();
-                }
-            };
+        let imgObj = null;
+        if (base.imageUrl) {
+            imgObj = new Image();
+            const baseURL = (window.MapManager && window.MapManager.baseURL) ? window.MapManager.baseURL : 'https://namnam2727.github.io/MMO/';
+            imgObj.src = baseURL + base.imageUrl;
         }
-    }, 100);
+
+        return {
+            uid: Date.now() + Math.random(),
+            id: npcId,
+            name: base.name || 'NPC',
+            type: 'npc', 
+            x: spawnX, y: spawnY, targetX: spawnX, targetY: spawnY,
+            radius: radius,
+            color: base.color || '#ffffff',
+            image: imgObj,
+            interact: base.interact || null,
+            shopItems: base.shopItems || []
+        };
+    };
 
     // ----------------------------------------------------------------------
     // 2. NPCへのタップ判定（main.js のクリック処理に相乗りする）
@@ -62,7 +45,6 @@
         
         if (!window.player || !window.camera || window.isMapLoading) return;
         
-        // main.js の input.screenX があれば使用し、なければ e.clientX を使用
         const sx = (typeof input !== 'undefined') ? input.screenX : e.clientX;
         const sy = (typeof input !== 'undefined') ? input.screenY : e.clientY;
         const targetX = sx + window.camera.x;
@@ -81,8 +63,6 @@
             window.player.targetEnemy = null;
             window.player.targetItem = null;
             window.player.isAutoAttacking = false;
-        } else {
-            window.player.targetNpc = null;
         }
     });
 
@@ -95,14 +75,12 @@
             const origLoop = window.gameLoop;
             
             window.gameLoop = function(timestamp) {
-                origLoop(timestamp); // 元のメインループを実行
+                origLoop(timestamp); 
                 
-                // その後、NPCへの接近判定を行う
                 if (window.player && window.player.targetNpc && !window.isMapLoading) {
                     const npc = window.player.targetNpc;
                     const dist = Math.hypot(npc.x - window.player.x, npc.y - window.player.y);
                     
-                    // 射程内に入ったら移動を止めてショップを開く
                     if (dist <= window.player.attackRange + 20) {
                         window.playerPath = []; 
                         if (npc.interact) npc.interact(npc, window.player);
@@ -124,9 +102,8 @@
             window.renderInventory = function() {
                 if (typeof window.validateShopCart === 'function') window.validateShopCart();
                 
-                origRender(); // お客様の完璧なインベントリ描画を実行
+                origRender(); 
                 
-                // 描画された後に、カートに入っているアイテムを半透明に上書き
                 const invContent = document.getElementById('invContent');
                 if (!invContent) return;
                 const tabId = window.tabsList[window.currentTabIndex];
@@ -151,34 +128,46 @@
     }, 100);
 
     // ----------------------------------------------------------------------
-    // 5. インベントリからのD&D売却判定（inventory_action.js 連携）
+    // 5. インベントリからのD&D売却判定
     // ----------------------------------------------------------------------
-    window.onItemDragEnd = function(dropTarget) {
-        const shopWin = dropTarget.closest('#shopWindow');
-        
-        if (shopWin && window.shopState && window.shopState.isOpen && window.shopState.mode === 'sell') {
-            let targetSlotIdx = -1;
-            const shopSlot = dropTarget.closest('.shop-sell-slot');
-            
-            if (shopSlot) {
-                targetSlotIdx = parseInt(shopSlot.dataset.slotIdx);
-            } else {
-                for (let i = 0; i < window.shopState.cart.length; i++) {
-                    if (!window.shopState.cart[i]) { targetSlotIdx = i; break; }
-                }
-            }
-
-            if (targetSlotIdx !== -1) {
-                if (typeof window.promptShopSellCount === 'function') {
-                    window.promptShopSellCount(window.dragState.item, targetSlotIdx);
-                }
-            } else {
-                if (typeof window.addLog === 'function') window.addLog("<span class='color-sys'>売却カートがいっぱいです。</span>", "sys");
-            }
-            return true; // 処理を横取りしたのでtrue
+    let originalOnItemDragEnd = null;
+    const initDragHook = setInterval(() => {
+        if (typeof window.onItemDragEnd !== 'undefined') {
+            originalOnItemDragEnd = window.onItemDragEnd;
         }
-        return false;
-    };
+        clearInterval(initDragHook);
+        
+        window.onItemDragEnd = function(dropTarget) {
+            const shopWin = dropTarget.closest('#shopWindow');
+            
+            if (shopWin && window.shopState && window.shopState.isOpen && window.shopState.mode === 'sell') {
+                let targetSlotIdx = -1;
+                const shopSlot = dropTarget.closest('.shop-sell-slot');
+                
+                if (shopSlot) {
+                    targetSlotIdx = parseInt(shopSlot.dataset.slotIdx);
+                } else {
+                    for (let i = 0; i < window.shopState.cart.length; i++) {
+                        if (!window.shopState.cart[i]) { targetSlotIdx = i; break; }
+                    }
+                }
+
+                if (targetSlotIdx !== -1) {
+                    if (typeof window.promptShopSellCount === 'function') {
+                        window.promptShopSellCount(window.dragState.item, targetSlotIdx);
+                    }
+                } else {
+                    if (typeof window.addLog === 'function') window.addLog("<span class='color-sys'>売却カートがいっぱいです。</span>", "sys");
+                }
+                return true; 
+            }
+            
+            if (typeof originalOnItemDragEnd === 'function') {
+                return originalOnItemDragEnd(dropTarget);
+            }
+            return false;
+        };
+    }, 100);
 
     // ----------------------------------------------------------------------
     // 6. ショップウィンドウのスクロール操作の許可
