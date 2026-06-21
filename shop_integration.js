@@ -37,7 +37,37 @@
     };
 
     // ----------------------------------------------------------------------
-    // 2. NPCへのタップ判定
+    // 2. UIの前面・背面管理（bringToFront）にショップを組み込むパッチ
+    // これによりインベントリやステータスとのz-index関係が正常化します
+    // ----------------------------------------------------------------------
+    const initBringToFrontHook = setInterval(() => {
+        if (typeof window.bringToFront === 'function') {
+            clearInterval(initBringToFrontHook);
+            const origBringToFront = window.bringToFront;
+            
+            window.bringToFront = function(windowId) {
+                origBringToFront(windowId); // 元の処理を実行
+                
+                const shopWin = document.getElementById('shopWindow');
+                const shopModal = document.getElementById('shopSellCountModal');
+                
+                // 基本のz-index
+                if (shopWin) shopWin.style.zIndex = 10;
+                if (shopModal) shopModal.style.zIndex = 11;
+                
+                // タップされた対象を前面に出す
+                if (windowId === 'shopWindow' && shopWin) shopWin.style.zIndex = 20;
+                if (windowId === 'shopSellCountModal' && shopModal) shopModal.style.zIndex = 21;
+                
+                // アイテム詳細ウィンドウは常に最優先で一番上に出す
+                const detail = document.getElementById('itemDetail');
+                if (detail && detail.style.display === 'flex') detail.style.zIndex = 30;
+            };
+        }
+    }, 100);
+
+    // ----------------------------------------------------------------------
+    // 3. NPCへのタップ判定 ＆ 枠外タップ時の解除処理
     // ----------------------------------------------------------------------
     window.addEventListener('pointerup', (e) => {
         if (e.target.closest('#invWindow, #itemDetail, #statusWindow, #shopWindow, #shopSellCountModal, button, input')) return;
@@ -62,11 +92,31 @@
             window.player.targetEnemy = null;
             window.player.targetItem = null;
             window.player.isAutoAttacking = false;
+        } else {
+            // ★追加: NPC以外の地面をタップした場合はターゲットを解除し、再度話しかけるのを防ぐ
+            window.player.targetNpc = null;
         }
     });
 
     // ----------------------------------------------------------------------
-    // 3. NPCへの接近と会話
+    // 4. 枠外（UI以外）タップ時にショップを安全に閉じるパッチ
+    // ----------------------------------------------------------------------
+    document.addEventListener('pointerdown', (e) => {
+        if (window.shopState && window.shopState.isOpen) {
+            // UIのどれかを触っているかチェック
+            const isUI = e.target.closest('#shopWindow, #invWindow, #itemDetail, #statusWindow, #shopSellCountModal, .shop-tab, #playerWidget, #bottomUIContainer, #chatLogContent, #fullLogContent');
+            
+            if (!isUI) {
+                // UI以外（背景のマップなど）をタップした場合は閉じる
+                if (typeof window.closeShopWindow === 'function') {
+                    window.closeShopWindow();
+                }
+            }
+        }
+    }, { capture: true }); // 他のイベント（キャラ移動など）より先に検知する
+
+    // ----------------------------------------------------------------------
+    // 5. NPCへの接近と会話
     // ----------------------------------------------------------------------
     const initLoopHook = setInterval(() => {
         if (window.gameLoop) {
@@ -83,6 +133,7 @@
                     if (dist <= window.player.attackRange + 20) {
                         window.playerPath = []; 
                         if (npc.interact) npc.interact(npc, window.player);
+                        // 話しかけ終わったらターゲットをクリア
                         window.player.targetNpc = null;
                     }
                 }
@@ -91,7 +142,7 @@
     }, 100);
 
     // ----------------------------------------------------------------------
-    // 4. インベントリ描画時の「半透明化」をフック
+    // 6. インベントリ描画時の「半透明化」をフック
     // ----------------------------------------------------------------------
     const initInvHook = setInterval(() => {
         if (typeof window.renderInventory === 'function') {
@@ -127,9 +178,8 @@
     }, 100);
 
     // ----------------------------------------------------------------------
-    // 5. インベントリからのD&D売却判定
+    // 7. インベントリからのD&D売却判定
     // ----------------------------------------------------------------------
-    // ★修正4: shortcut.jsのロード後に確実にドロップ判定を上書きし、消滅を防ぐ
     setTimeout(() => {
         const originalOnItemDragEnd = window.onItemDragEnd;
         
@@ -143,7 +193,6 @@
                 if (shopSlot) {
                     targetSlotIdx = parseInt(shopSlot.dataset.slotIdx);
                 } else {
-                    // スロット外でもウィンドウ内なら適当な空き枠を探す
                     for (let i = 0; i < window.shopState.cart.length; i++) {
                         if (!window.shopState.cart[i]) { targetSlotIdx = i; break; }
                     }
@@ -159,16 +208,15 @@
                 return true; 
             }
             
-            // 元の（ショートカット用の）D&D処理を呼び出す
             if (typeof originalOnItemDragEnd === 'function') {
                 return originalOnItemDragEnd(dropTarget);
             }
             return false;
         };
-    }, 2000); // 2秒遅らせて確実に最後に適用する
+    }, 2000); 
 
     // ----------------------------------------------------------------------
-    // 6. ショップウィンドウのスクロール操作の許可
+    // 8. ショップウィンドウのスクロール操作の許可
     // ----------------------------------------------------------------------
     document.addEventListener('touchmove', function(e) {
         if (window.isDraggingItem) return;
