@@ -84,7 +84,6 @@
                         <hr style="border:0; border-top:1px solid #555; width:100%; margin:2px 0;" />
                         
                         <div id="shopBuyActionArea" style="display:none; flex-direction:column; gap:8px;">
-                            <!-- ★修正: 装備品などでスタック不可の場合は、この AmountCtrl ごと非表示になります -->
                             <div id="shopBuyAmountCtrl" style="display:flex; flex-direction:column; gap:5px; background:rgba(0,0,0,0.3); padding:5px; border-radius:4px;">
                                 <div style="display:flex; justify-content:space-between; align-items:center;">
                                     <button id="shopBuyMinus" style="width:24px; height:24px; background:#555; color:#fff; border:none; border-radius:4px; font-size:14px;">-</button>
@@ -130,7 +129,6 @@
         const updateBuyCount = (val) => {
             const itemData = window.ITEM_DB[window.shopState.selectedBuyItemId];
             if (!itemData) return;
-            // ★修正: スタック上限が1（または未設定で1扱い）の場合は、上限を1に固定
             const maxStack = itemData.maxStack || 1;
             const maxVal = maxStack === 1 ? 1 : 99;
             
@@ -246,7 +244,10 @@
                     if (invItem.count > cartItem.count) invItem.count -= cartItem.count;
                     else window.player.inventory[foundTab].items.splice(foundIdx, 1);
                     
-                    const unitPrice = Math.floor((invItem.price || 0) / 10);
+                    // ★修正: priceが含まれていない場合もITEM_DBから参照する
+                    const basePrice = invItem.price || (window.ITEM_DB && window.ITEM_DB[invItem.id] ? window.ITEM_DB[invItem.id].price : 0) || 0;
+                    const unitPrice = Math.floor(basePrice / 10);
+                    
                     totalGold += unitPrice * cartItem.count;
                     itemsSold++;
                 }
@@ -319,7 +320,11 @@
                         <div style="position:absolute; bottom:2px; right:4px; font-size:12px; font-weight:bold; text-shadow:1px 1px 1px #000;">${cartItem.count}</div>
                         <div class="shop-slot-remove" style="position:absolute; top:-5px; right:-5px; width:20px; height:20px; background:#ff4444; color:#fff; border-radius:50%; display:flex; justify-content:center; align-items:center; font-size:12px; font-weight:bold; cursor:pointer; z-index:10; box-shadow:0 2px 4px rgba(0,0,0,0.5);">×</div>
                     `;
-                    const unitPrice = Math.floor((cartItem.item.price || 0) / 10);
+                    
+                    // ★修正: priceが含まれていない場合もITEM_DBから参照する
+                    const basePrice = cartItem.item.price || (window.ITEM_DB && window.ITEM_DB[cartItem.item.id] ? window.ITEM_DB[cartItem.item.id].price : 0) || 0;
+                    const unitPrice = Math.floor(basePrice / 10);
+                    
                     totalSellPrice += unitPrice * cartItem.count;
                 }
 
@@ -350,7 +355,6 @@
             document.getElementById('shopDetailDesc').innerText = itemData.desc || '';
             document.getElementById('shopDetailUnitPrice').innerText = `${itemData.price || 0} 星粒`;
             
-            // ★修正: 装備品などでスタック上限が1の場合は、数量選択コントロール自体を隠す
             const maxStack = itemData.maxStack || 1;
             if (maxStack === 1) {
                 document.getElementById('shopBuyAmountCtrl').style.display = 'none';
@@ -372,7 +376,10 @@
                 document.getElementById('shopDetailName').innerText = cartItem.item.name;
                 document.getElementById('shopDetailDesc').innerText = cartItem.item.desc || '';
                 
-                const unitPrice = Math.floor((cartItem.item.price || 0) / 10);
+                // ★修正: priceが含まれていない場合もITEM_DBから参照する
+                const basePrice = cartItem.item.price || (window.ITEM_DB && window.ITEM_DB[cartItem.item.id] ? window.ITEM_DB[cartItem.item.id].price : 0) || 0;
+                const unitPrice = Math.floor(basePrice / 10);
+                
                 document.getElementById('shopDetailUnitPrice').innerText = `${unitPrice} 星粒`;
                 document.getElementById('shopSellDetailCount').innerText = `${cartItem.count}`;
                 document.getElementById('shopSellDetailTotal').innerText = `${unitPrice * cartItem.count} 星粒`;
@@ -399,10 +406,13 @@
         
         let currentVal = 1; 
         const maxVal = item.count || 1;
-        const unitPrice = Math.floor((item.price || 0) / 10);
+        
+        // ★修正: priceが含まれていない場合もITEM_DBから参照する
+        const basePrice = item.price || (window.ITEM_DB && window.ITEM_DB[item.id] ? window.ITEM_DB[item.id].price : 0) || 0;
+        const unitPrice = Math.floor(basePrice / 10);
+        
         const descText = (item.desc || '').replace(/\\n/g, '<br>');
         
-        // ★修正: 売るアイテムが1個しかない場合（またはスタック不可）はスライダー部分を表示しない
         const amountCtrlDisplay = maxVal > 1 ? 'block' : 'none';
         
         modal.innerHTML = `
