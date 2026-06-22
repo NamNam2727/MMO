@@ -15,10 +15,10 @@ window.RARITY = {
 // ★追加: レアリティによる価格と容量の変動倍率テーブル
 window.RARITY_RATES = {
     Common: { price: 1, capacity: 1 },
-    Uncommon: { price: 20, capacity: 2 },
-    Rare: { price: 300, capacity: 3 },
-    Epic: { price: 4000, capacity: 4 },
-    Legend: { price: 50000, capacity: 5 }
+    Uncommon: { price: 5, capacity: 2 },
+    Rare: { price: 25, capacity: 3 },
+    Epic: { price: 125, capacity: 4 },
+    Legend: { price: 625, capacity: 5 }
 };
 
 // アイテムマスターデータ（すべての基礎値として Common 相当のステータスを設定します）
@@ -76,37 +76,37 @@ window.ITEM_DB = {
     'chip_enemy_single_str': { 
         id: 'chip_enemy_single_str', type: 'consume', name: '単体チップ(ちから)', 
         rarity: 'Common', maxStack: 99, color: '#aa5500', baseDesc: 'ちから依存/敵単体', 
-        chipData: { capacity: 5, dependency: 'str', targetType: 'enemy', areaType: 'single' }, price: 10 
+        chipData: { capacity: 5, dependency: 'str', targetType: 'enemy', areaType: 'single' }, price: 40 
     },
     'chip_enemy_single_int': { 
         id: 'chip_enemy_single_int', type: 'consume', name: '単体チップ(まりょく)', 
         rarity: 'Common', maxStack: 99, color: '#5500aa', baseDesc: 'まりょく依存/敵単体', 
-        chipData: { capacity: 5, dependency: 'int', targetType: 'enemy', areaType: 'single' }, price: 10 
+        chipData: { capacity: 5, dependency: 'int', targetType: 'enemy', areaType: 'single' }, price: 50 
     },
     'chip_enemy_circle_str': { 
         id: 'chip_enemy_circle_str', type: 'consume', name: '円範囲チップ(ちから)', 
         rarity: 'Common', maxStack: 99, color: '#cc6600', baseDesc: 'ちから依存/敵円範囲', 
-        chipData: { capacity: 8, dependency: 'str', targetType: 'enemy', areaType: 'circle' }, price: 15 
+        chipData: { capacity: 8, dependency: 'str', targetType: 'enemy', areaType: 'circle' }, price: 100 
     },
     'chip_enemy_circle_int': { 
         id: 'chip_enemy_circle_int', type: 'consume', name: '円範囲チップ(まりょく)', 
         rarity: 'Common', maxStack: 99, color: '#6600cc', baseDesc: 'まりょく依存/敵円範囲', 
-        chipData: { capacity: 8, dependency: 'int', targetType: 'enemy', areaType: 'circle' }, price: 15 
+        chipData: { capacity: 8, dependency: 'int', targetType: 'enemy', areaType: 'circle' }, price: 120 
     },
     'chip_self_str': { 
         id: 'chip_self_str', type: 'consume', name: '自身チップ(ちから)', 
         rarity: 'Common', maxStack: 99, color: '#aa8800', baseDesc: 'ちから依存/自身対象', 
-        chipData: { capacity: 5, dependency: 'str', targetType: 'self', areaType: 'single' }, price: 10 
+        chipData: { capacity: 5, dependency: 'str', targetType: 'self', areaType: 'single' }, price: 40 
     },
     'chip_ally_single_int': { 
         id: 'chip_ally_single_int', type: 'consume', name: '味方単体チップ(まりょく)', 
         rarity: 'Common', maxStack: 99, color: '#00aa55', baseDesc: 'まりょく依存/味方単体', 
-        chipData: { capacity: 5, dependency: 'int', targetType: 'ally', areaType: 'single' }, price: 10 
+        chipData: { capacity: 5, dependency: 'int', targetType: 'ally', areaType: 'single' }, price: 50 
     },
     'chip_ally_circle_int': { 
         id: 'chip_ally_circle_int', type: 'consume', name: '味方円範囲チップ(まりょく)', 
         rarity: 'Common', maxStack: 99, color: '#00cc66', baseDesc: 'まりょく依存/味方円範囲', 
-        chipData: { capacity: 8, dependency: 'int', targetType: 'ally', areaType: 'circle' }, price: 15 
+        chipData: { capacity: 8, dependency: 'int', targetType: 'ally', areaType: 'circle' }, price: 100 
     },
     
     // ==========================================
