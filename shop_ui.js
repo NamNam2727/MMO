@@ -1,7 +1,7 @@
 // =========================================================
 // shop_ui.js
 // 街のショップNPC専用のUI（購入・売却カートシステム）の完全版
-// スクロール修正・DB価格参照対応版
+// スクロール貫通・画面バウンス防止 徹底対策版
 // =========================================================
 
 (function() {
@@ -30,17 +30,36 @@
         shopWin.id = 'shopWindow';
         shopWin.style.cssText = 'position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); display:none; flex-direction:column; width:95vw; max-width:850px; height:85vh; max-height:600px; background:rgba(20,20,30,0.95); border:2px solid #aaa; border-radius:8px; z-index:75; color:#fff; pointer-events:auto; box-shadow:0 10px 30px rgba(0,0,0,0.9);';
         
-        // ★修正: タッチ操作などのイベント伝播を停止し、ウィンドウ内のスクロールを機能させる
+        // --- イベント伝播とスクロールの制御 ---
         shopWin.addEventListener('pointerdown', (e) => {
             e.stopPropagation();
             if(window.bringToFront) window.bringToFront('shopWindow');
         });
         shopWin.addEventListener('pointermove', (e) => e.stopPropagation());
         shopWin.addEventListener('pointerup', (e) => e.stopPropagation());
-        shopWin.addEventListener('wheel', (e) => e.stopPropagation(), {passive: true});
         shopWin.addEventListener('touchstart', (e) => e.stopPropagation(), {passive: true});
-        shopWin.addEventListener('touchmove', (e) => e.stopPropagation(), {passive: true});
+        
+        // ★修正: スクロール領域以外での操作をブロックし、限界時の画面揺れを防ぐ
+        const handleShopScroll = (e) => {
+            // スライダー(input range)の操作は邪魔しない
+            if (e.target.tagName && e.target.tagName.toLowerCase() === 'input' && e.target.type === 'range') {
+                e.stopPropagation();
+                return;
+            }
+            // スクロール可能なエリア内かどうかを判定
+            const scrollArea = e.target.closest('.shop-scroll-area');
+            if (!scrollArea) {
+                // スクロール領域外（タイトルバー等）なら、デフォルトのスクロール挙動を完全に無効化
+                if (e.cancelable) e.preventDefault();
+            }
+            e.stopPropagation();
+        };
 
+        // passive: false にすることで e.preventDefault() が機能するようになります
+        shopWin.addEventListener('wheel', handleShopScroll, {passive: false});
+        shopWin.addEventListener('touchmove', handleShopScroll, {passive: false});
+
+        // ★修正: overflow-y:autoの要素に class="shop-scroll-area" と overscroll-behavior:contain を追加
         shopWin.innerHTML = `
             <div id="shopTitleBar" style="padding:10px; background:linear-gradient(to right, #445, #223); border-bottom:1px solid #777; border-radius:6px 6px 0 0; display:flex; justify-content:space-between; align-items:center; touch-action:none;">
                 <div style="font-weight:bold; font-size:16px;">ショップ - <span id="shopNpcName">商人</span></div>
@@ -58,10 +77,10 @@
                 </div>
 
                 <div style="flex:1; display:flex; flex-direction:column; background:rgba(0,0,0,0.5); position:relative;">
-                    <div id="shopBuyArea" style="flex:1; overflow-y:auto; padding:10px; display:flex; flex-direction:column; gap:5px; touch-action:pan-y;"></div>
+                    <div id="shopBuyArea" class="shop-scroll-area" style="flex:1; overflow-y:auto; overscroll-behavior:contain; padding:10px; display:flex; flex-direction:column; gap:5px; touch-action:pan-y;"></div>
                     
                     <div id="shopSellArea" style="flex:1; display:none; flex-direction:column;">
-                        <div id="shopCartSlots" style="flex:1; overflow-y:auto; padding:10px; display:grid; grid-template-columns:repeat(4, 1fr); grid-auto-rows:max-content; gap:5px; align-content:start; touch-action:pan-y;"></div>
+                        <div id="shopCartSlots" class="shop-scroll-area" style="flex:1; overflow-y:auto; overscroll-behavior:contain; padding:10px; display:grid; grid-template-columns:repeat(4, 1fr); grid-auto-rows:max-content; gap:5px; align-content:start; touch-action:pan-y;"></div>
                         
                         <div style="padding:10px; border-top:1px solid #555; background:rgba(20,20,20,0.8); display:flex; justify-content:space-between; align-items:center; touch-action:none;">
                             <button id="shopOpenBagBtn" style="padding:8px 12px; background:#336699; color:#fff; border:none; border-radius:4px; font-weight:bold; cursor:pointer;">バッグを開く</button>
@@ -76,7 +95,7 @@
                     </div>
                 </div>
 
-                <div id="shopRightPanel" style="width:100px; background:rgba(30,30,40,0.9); border-left:1px solid #555; padding:10px; box-sizing:border-box; display:flex; flex-direction:column; gap:10px; overflow-y:auto; touch-action:pan-y;">
+                <div id="shopRightPanel" class="shop-scroll-area" style="width:100px; background:rgba(30,30,40,0.9); border-left:1px solid #555; padding:10px; box-sizing:border-box; display:flex; flex-direction:column; gap:10px; overflow-y:auto; overscroll-behavior:contain; touch-action:pan-y;">
                     <div id="shopDetailEmpty" style="color:#888; text-align:center; margin-top:50px; font-size:12px;">アイテムを選択</div>
                     
                     <div id="shopDetailContent" style="display:none; flex-direction:column; gap:10px;">
@@ -439,16 +458,26 @@
             modal.id = 'shopSellCountModal';
             modal.style.cssText = 'position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); width:260px; background:rgba(20,20,30,0.95); border:2px solid #aaa; border-radius:8px; z-index:100; color:#fff; display:none; flex-direction:column; padding:15px; box-shadow:0 10px 30px rgba(0,0,0,0.9); pointer-events:auto;';
             
-            // ★修正: こちらもイベント伝播を止める
+            // ★修正: モーダル側も同様にスクロールイベントを制御
             modal.addEventListener('pointerdown', (e) => {
                 e.stopPropagation();
                 if(window.bringToFront) window.bringToFront('shopSellCountModal');
             });
             modal.addEventListener('pointermove', (e) => e.stopPropagation());
             modal.addEventListener('pointerup', (e) => e.stopPropagation());
-            modal.addEventListener('wheel', (e) => e.stopPropagation(), {passive: true});
             modal.addEventListener('touchstart', (e) => e.stopPropagation(), {passive: true});
-            modal.addEventListener('touchmove', (e) => e.stopPropagation(), {passive: true});
+            
+            const handleModalScroll = (e) => {
+                if (e.target.tagName && e.target.tagName.toLowerCase() === 'input' && e.target.type === 'range') {
+                    e.stopPropagation();
+                    return;
+                }
+                // モーダル内はスクロール領域がないため、操作はすべてブロック
+                if (e.cancelable) e.preventDefault();
+                e.stopPropagation();
+            };
+            modal.addEventListener('wheel', handleModalScroll, {passive: false});
+            modal.addEventListener('touchmove', handleModalScroll, {passive: false});
             
             document.getElementById('ui-layer').appendChild(modal);
         }
