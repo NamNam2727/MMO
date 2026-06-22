@@ -9,7 +9,7 @@
         npc: null,
         mode: 'buy', 
         cart: Array(24).fill(null), 
-        selectedBuyItemId: null,
+        selectedBuyItemIdx: -1, // ★修正: IDではなく配列の何番目かで管理する
         selectedSellSlot: -1,
         buyCount: 1
     };
@@ -127,8 +127,14 @@
         });
 
         const updateBuyCount = (val) => {
-            const itemData = window.ITEM_DB[window.shopState.selectedBuyItemId];
+            if (window.shopState.selectedBuyItemIdx === -1) return;
+            const shopItemDef = window.shopState.npc.shopItems[window.shopState.selectedBuyItemIdx];
+            const itemId = typeof shopItemDef === 'string' ? shopItemDef : shopItemDef.id;
+            const targetRarity = typeof shopItemDef === 'string' ? null : shopItemDef.rarity;
+            
+            const itemData = window.createItemWithRarity ? window.createItemWithRarity(itemId, targetRarity) : window.ITEM_DB[itemId];
             if (!itemData) return;
+            
             const maxStack = itemData.maxStack || 1;
             const maxVal = maxStack === 1 ? 1 : 99;
             
@@ -137,6 +143,7 @@
             document.getElementById('shopBuyCountText').innerText = window.shopState.buyCount;
             document.getElementById('shopBuyTotalPrice').innerText = `${(itemData.price || 0) * window.shopState.buyCount} 星粒`;
         };
+        
         document.getElementById('shopBuyMinus').onclick = () => updateBuyCount(window.shopState.buyCount - 1);
         document.getElementById('shopBuyPlus').onclick = () => updateBuyCount(window.shopState.buyCount + 1);
         
@@ -182,7 +189,7 @@
     window.openShopWindow = function(npc) {
         if (!npc || !npc.shopItems) return;
         window.shopState.isOpen = true; window.shopState.npc = npc; window.shopState.mode = 'buy';
-        window.shopState.selectedBuyItemId = null; window.shopState.selectedSellSlot = -1;
+        window.shopState.selectedBuyItemIdx = -1; window.shopState.selectedSellSlot = -1;
         document.getElementById('shopNpcName').innerText = npc.name;
         
         const shopWin = document.getElementById('shopWindow');
@@ -206,8 +213,12 @@
     };
 
     window.executeShopBuy = function() {
-        if (!window.shopState.selectedBuyItemId) return;
-        const itemData = window.ITEM_DB[window.shopState.selectedBuyItemId];
+        if (window.shopState.selectedBuyItemIdx === -1) return;
+        const shopItemDef = window.shopState.npc.shopItems[window.shopState.selectedBuyItemIdx];
+        const itemId = typeof shopItemDef === 'string' ? shopItemDef : shopItemDef.id;
+        const targetRarity = typeof shopItemDef === 'string' ? null : shopItemDef.rarity;
+        
+        const itemData = window.createItemWithRarity ? window.createItemWithRarity(itemId, targetRarity) : window.ITEM_DB[itemId];
         if (!itemData) return;
         
         const totalCost = (itemData.price || 0) * window.shopState.buyCount;
@@ -244,7 +255,6 @@
                     if (invItem.count > cartItem.count) invItem.count -= cartItem.count;
                     else window.player.inventory[foundTab].items.splice(foundIdx, 1);
                     
-                    // ★修正: priceが含まれていない場合もITEM_DBから参照する
                     const basePrice = invItem.price || (window.ITEM_DB && window.ITEM_DB[invItem.id] ? window.ITEM_DB[invItem.id].price : 0) || 0;
                     const unitPrice = Math.floor(basePrice / 10);
                     
@@ -280,17 +290,26 @@
             if (window.invWindow && window.invWindow.style.display === 'flex') { if(typeof window.toggleInventory === 'function') window.toggleInventory(); }
 
             areaBuy.innerHTML = '';
-            window.shopState.npc.shopItems.forEach(itemId => {
-                const itemData = window.ITEM_DB[itemId];
+            
+            // ★修正: レアリティ指定データに対応し、インデックスで管理するように変更
+            window.shopState.npc.shopItems.forEach((shopItemDef, idx) => {
+                const itemId = typeof shopItemDef === 'string' ? shopItemDef : shopItemDef.id;
+                const targetRarity = typeof shopItemDef === 'string' ? null : shopItemDef.rarity;
+                
+                const itemData = window.createItemWithRarity ? window.createItemWithRarity(itemId, targetRarity) : window.ITEM_DB[itemId];
                 if (!itemData) return;
+                
+                const rarityColor = window.RARITY && window.RARITY[itemData.rarity] ? window.RARITY[itemData.rarity].color : '#fff';
+                
                 const row = document.createElement('div');
-                row.style.cssText = `display:flex; align-items:center; gap:10px; padding:8px; background:rgba(255,255,255,0.1); border-radius:4px; cursor:pointer; border:2px solid ${window.shopState.selectedBuyItemId === itemId ? '#4CAF50' : 'transparent'};`;
+                row.style.cssText = `display:flex; align-items:center; gap:10px; padding:8px; background:rgba(255,255,255,0.1); border-radius:4px; cursor:pointer; border:2px solid ${window.shopState.selectedBuyItemIdx === idx ? '#4CAF50' : 'transparent'};`;
+                
                 row.innerHTML = `
-                    <div style="width:36px; height:36px; background:#000; border:1px solid #777; border-radius:4px; display:flex; justify-content:center; align-items:center; font-size:18px;">${window.getItemIconHTML(itemData)}</div>
-                    <div style="flex:1; font-weight:bold; font-size:14px;">${itemData.name}</div>
+                    <div style="width:36px; height:36px; background:#000; border:2px solid ${rarityColor}; border-radius:4px; display:flex; justify-content:center; align-items:center; font-size:18px;">${window.getItemIconHTML(itemData)}</div>
+                    <div style="flex:1; font-weight:bold; font-size:14px; color:${rarityColor};">${itemData.name}</div>
                     <div style="color:#ffd700; font-weight:bold; font-size:14px;">${itemData.price || 0} 星粒</div>
                 `;
-                row.onclick = () => { window.shopState.selectedBuyItemId = itemId; window.shopState.buyCount = 1; window.renderShopUI(); };
+                row.onclick = () => { window.shopState.selectedBuyItemIdx = idx; window.shopState.buyCount = 1; window.renderShopUI(); };
                 areaBuy.appendChild(row);
             });
         } else {
@@ -315,13 +334,17 @@
                 if (cartItem) {
                     slotDiv.style.borderStyle = 'solid'; slotDiv.style.borderWidth = '2px';
                     slotDiv.style.borderColor = window.shopState.selectedSellSlot === i ? '#e94560' : '#888';
+                    
+                    // レアリティカラーを枠線に反映
+                    const rarityColor = window.RARITY && window.RARITY[cartItem.item.rarity] ? window.RARITY[cartItem.item.rarity].color : '#888';
+                    slotDiv.style.borderColor = window.shopState.selectedSellSlot === i ? '#e94560' : rarityColor;
+
                     slotDiv.innerHTML = `
                         <div style="position:absolute; top:0; left:0; width:100%; height:100%;">${window.getItemIconHTML(cartItem.item)}</div>
                         <div style="position:absolute; bottom:2px; right:4px; font-size:12px; font-weight:bold; text-shadow:1px 1px 1px #000;">${cartItem.count}</div>
                         <div class="shop-slot-remove" style="position:absolute; top:-5px; right:-5px; width:20px; height:20px; background:#ff4444; color:#fff; border-radius:50%; display:flex; justify-content:center; align-items:center; font-size:12px; font-weight:bold; cursor:pointer; z-index:10; box-shadow:0 2px 4px rgba(0,0,0,0.5);">×</div>
                     `;
                     
-                    // ★修正: priceが含まれていない場合もITEM_DBから参照する
                     const basePrice = cartItem.item.price || (window.ITEM_DB && window.ITEM_DB[cartItem.item.id] ? window.ITEM_DB[cartItem.item.id].price : 0) || 0;
                     const unitPrice = Math.floor(basePrice / 10);
                     
@@ -346,14 +369,24 @@
         const detailEmpty = document.getElementById('shopDetailEmpty');
         const detailContent = document.getElementById('shopDetailContent');
 
-        if (window.shopState.mode === 'buy' && window.shopState.selectedBuyItemId) {
-            const itemData = window.ITEM_DB[window.shopState.selectedBuyItemId];
+        if (window.shopState.mode === 'buy' && window.shopState.selectedBuyItemIdx !== -1) {
+            const shopItemDef = window.shopState.npc.shopItems[window.shopState.selectedBuyItemIdx];
+            const itemId = typeof shopItemDef === 'string' ? shopItemDef : shopItemDef.id;
+            const targetRarity = typeof shopItemDef === 'string' ? null : shopItemDef.rarity;
+            
+            const itemData = window.createItemWithRarity ? window.createItemWithRarity(itemId, targetRarity) : window.ITEM_DB[itemId];
+            if (!itemData) return;
+            
             detailEmpty.style.display = 'none'; detailContent.style.display = 'flex';
             document.getElementById('shopBuyActionArea').style.display = 'flex'; document.getElementById('shopSellActionArea').style.display = 'none';
             document.getElementById('shopDetailIcon').innerHTML = window.getItemIconHTML(itemData);
             document.getElementById('shopDetailName').innerText = itemData.name;
             document.getElementById('shopDetailDesc').innerText = itemData.desc || '';
             document.getElementById('shopDetailUnitPrice').innerText = `${itemData.price || 0} 星粒`;
+            
+            // 色もレアリティカラーに変更
+            const rarityColor = window.RARITY && window.RARITY[itemData.rarity] ? window.RARITY[itemData.rarity].color : '#fff';
+            document.getElementById('shopDetailName').style.color = rarityColor;
             
             const maxStack = itemData.maxStack || 1;
             if (maxStack === 1) {
@@ -376,9 +409,11 @@
                 document.getElementById('shopDetailName').innerText = cartItem.item.name;
                 document.getElementById('shopDetailDesc').innerText = cartItem.item.desc || '';
                 
-                // ★修正: priceが含まれていない場合もITEM_DBから参照する
                 const basePrice = cartItem.item.price || (window.ITEM_DB && window.ITEM_DB[cartItem.item.id] ? window.ITEM_DB[cartItem.item.id].price : 0) || 0;
                 const unitPrice = Math.floor(basePrice / 10);
+                
+                const rarityColor = window.RARITY && window.RARITY[cartItem.item.rarity] ? window.RARITY[cartItem.item.rarity].color : '#fff';
+                document.getElementById('shopDetailName').style.color = rarityColor;
                 
                 document.getElementById('shopDetailUnitPrice').innerText = `${unitPrice} 星粒`;
                 document.getElementById('shopSellDetailCount').innerText = `${cartItem.count}`;
@@ -407,20 +442,18 @@
         let currentVal = 1; 
         const maxVal = item.count || 1;
         
-        // ★修正: priceが含まれていない場合もITEM_DBから参照する
         const basePrice = item.price || (window.ITEM_DB && window.ITEM_DB[item.id] ? window.ITEM_DB[item.id].price : 0) || 0;
         const unitPrice = Math.floor(basePrice / 10);
-        
         const descText = (item.desc || '').replace(/\\n/g, '<br>');
-        
         const amountCtrlDisplay = maxVal > 1 ? 'block' : 'none';
+        const rarityColor = window.RARITY && window.RARITY[item.rarity] ? window.RARITY[item.rarity].color : '#fff';
         
         modal.innerHTML = `
             <div style="font-weight:bold; text-align:center; margin-bottom:10px; font-size:16px;">売却リストに追加</div>
             
             <div style="display:flex; flex-direction:column; align-items:center; gap:5px; margin-bottom:10px; padding:10px; background:rgba(0,0,0,0.3); border-radius:6px;">
-                <div style="width:44px; height:44px; background:#000; border:1px solid #777; border-radius:4px; display:flex; justify-content:center; align-items:center; font-size:24px;">${window.getItemIconHTML(item)}</div>
-                <div style="font-weight:bold; font-size:14px; text-align:center;">${item.name}</div>
+                <div style="width:44px; height:44px; background:#000; border:2px solid ${rarityColor}; border-radius:4px; display:flex; justify-content:center; align-items:center; font-size:24px;">${window.getItemIconHTML(item)}</div>
+                <div style="font-weight:bold; font-size:14px; text-align:center; color:${rarityColor};">${item.name}</div>
                 <div style="font-size:11px; color:#ccc; line-height:1.4; text-align:center;">${descText}</div>
                 <div style="font-size:12px; color:#ffd700; margin-top:5px;">単価: ${unitPrice} 星粒</div>
             </div>

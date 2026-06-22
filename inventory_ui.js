@@ -40,8 +40,10 @@ window.compressStacks = function() {
         for (let i = 0; i < items.length; i++) {
             const item = items[i];
             if (item.maxStack > 1) {
-                if (!itemsById[item.id]) itemsById[item.id] = [];
-                itemsById[item.id].push(item);
+                // ★修正: IDとレアリティをくっつけた専用キーを作成
+                const groupKey = item.id + '_' + item.rarity;
+                if (!itemsById[groupKey]) itemsById[groupKey] = [];
+                itemsById[groupKey].push(item);
             }
         }
         
@@ -78,7 +80,9 @@ window.compressStacks = function() {
             
             for (let i = items.length - 1; i >= 0; i--) {
                 const item = items[i];
-                if (item.maxStack > 1 && item.id === id && item.count <= 0) {
+                // ★修正: IDとレアリティをくっつけたキーで削除判定を行う
+                const checkKey = item.id + '_' + item.rarity;
+                if (item.maxStack > 1 && checkKey === id && item.count <= 0) {
                     items.splice(i, 1);
                 }
             }

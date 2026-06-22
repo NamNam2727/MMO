@@ -27,9 +27,7 @@ window.player = {
     gold: 0, 
     equipped: { weapon: null, armor: null, accessory: null },
     
-    // 状態異常の管理配列と被弾回数履歴
-    effects: [], 
-    effectCounts: {}, 
+    effects: [], effectCounts: {}, 
     
     inventory: {
         equip: { capacity: 20, items: [] }, consume: { capacity: 20, items: [] },
@@ -37,7 +35,6 @@ window.player = {
     }
 };
 
-// 初期デバッグ武器をインベントリに格納
 const initWeapons = ['sword_fire', 'sword_ice', 'sword_lightning', 'bow_wind'];
 if (window.ITEM_DB) {
     initWeapons.forEach(id => { 
@@ -87,7 +84,6 @@ window.updatePlayerStats = function() {
     }
 };
 
-// --- 経験値獲得 ---
 window.addExp = function(amount) {
     window.player.exp += amount; 
     let leveledUp = false;
@@ -119,7 +115,8 @@ window.addItemToInventory = function(itemData) {
     if (!tab) return false;
     const addCount = itemData.count || 1;
     if (itemData.maxStack > 1) {
-        let existingItem = tab.items.find(i => i.id === itemData.id && i.count < i.maxStack);
+        // ★修正: id だけでなく rarity(レアリティ) も一致するかを厳密にチェック
+        let existingItem = tab.items.find(i => i.id === itemData.id && i.rarity === itemData.rarity && i.count < i.maxStack);
         if (existingItem) {
             if (existingItem.count + addCount <= existingItem.maxStack) { existingItem.count += addCount; return true; }
         }
@@ -155,10 +152,8 @@ window.checkPlayerDeath = function() {
     }
 };
 
-// 属性変換用テキスト定義
 window.transElement = { 'fire':'炎上', 'ice':'凍結', 'lightning':'感電', 'wind':'風圧', 'earth':'地' };
 
-// --- 属性効果の付与ロジック ---
 window.applyElementEffect = function(attacker, target, element, params = {}, skillId = 'basic') {
     if (!element) return;
     
@@ -172,7 +167,6 @@ window.applyElementEffect = function(attacker, target, element, params = {}, ski
     const effectId = element + '_' + attacker.id + '_' + skillId;
     let existing = target.effects.find(e => e.id === effectId);
 
-    // すでに同じ状態異常、または免疫期間中の場合は弾く
     if (existing) {
         if (existing.immune > 0 || existing.duration > 0) return; 
         target.effects = target.effects.filter(e => e.id !== effectId);
@@ -189,7 +183,6 @@ window.applyElementEffect = function(attacker, target, element, params = {}, ski
     else if (element === 'wind') { duration = duration || 0.5; }
     else if (element === 'earth') { duration = duration || 0; }
 
-    // 状態異常を受けた回数をカウントアップし、免疫時間を計算
     target.effectCounts[effectId] = (target.effectCounts[effectId] || 0) + 1;
     let immuneTime = duration * target.effectCounts[effectId];
 
@@ -197,7 +190,6 @@ window.applyElementEffect = function(attacker, target, element, params = {}, ski
         window.addLog(`${window.getEntityName(attacker)} は ${window.getEntityName(target)} に <span class='color-status'>【${window.transElement[element]}】</span> を与えた！`, 'damage');
     }
 
-    // 凍結・感電の「一番長いもので上書き」処理
     if (element === 'ice' || element === 'lightning') {
         let sameTypeExisting = target.effects.find(e => e.type === element && e.duration > 0);
         if (sameTypeExisting) {
@@ -225,7 +217,6 @@ window.applyElementEffect = function(attacker, target, element, params = {}, ski
     });
 };
 
-// --- 状態異常の更新 ---
 window.updateEffects = function(entity, dt) {
     if (entity.state === 'dead' || entity.hp <= 0) return;
     
@@ -256,19 +247,14 @@ window.updateEffects = function(entity, dt) {
     }
 };
 
-// ==========================================
-// ★ 敵データベースと生成ロジックの刷新
-// ==========================================
-window.ENEMY_DB = window.ENEMY_DB || {}; // エリアごとの別ファイルで登録するための大元DB
+window.ENEMY_DB = window.ENEMY_DB || {}; 
 
-// レベルとIDを指定して敵の実体を生成する関数
 window.spawnEnemy = function(enemyId, level, spawnX, spawnY) {
     if (!window.ENEMY_DB || !window.ENEMY_DB[enemyId]) return null;
     
     const base = window.ENEMY_DB[enemyId];
     const lvl = level || 1;
     
-    // レベル補正 (1レベルにつきステータス+20%)
     const statMultiplier = 1 + (lvl - 1) * 0.2;
     const hp = Math.floor((base.baseHp || 50) * statMultiplier);
     const atk = Math.floor((base.baseAtk || 5) * statMultiplier);
@@ -277,7 +263,6 @@ window.spawnEnemy = function(enemyId, level, spawnX, spawnY) {
     const radius = base.radius || 15;
     const initialPos = window.getSafeRandomPosition(spawnX, spawnY, 50, radius, base.isFlying);
 
-    // ★追加: 画像の非同期ロード
     let imgObj = null;
     if (base.imageUrl) {
         imgObj = new Image();
@@ -294,10 +279,10 @@ window.spawnEnemy = function(enemyId, level, spawnX, spawnY) {
         x: initialPos.x, y: initialPos.y, targetX: initialPos.x, targetY: initialPos.y,
         path: [], radius: radius, color: base.color || '#ff0000',
         
-        image: imgObj, // ★追加: 画像オブジェクトを保持
+        image: imgObj, 
         
         hp: hp, maxHp: hp,
-        armor: base.baseArmor || 0, // バフ等で変動させる防御力枠
+        armor: base.baseArmor || 0, 
         
         speed: base.speed !== undefined ? base.speed : 30,
         isFlying: base.isFlying || false, 
@@ -316,20 +301,16 @@ window.spawnEnemy = function(enemyId, level, spawnX, spawnY) {
         effects: [], effectCounts: {},
         dropTable: base.dropTable || [],
         
-        // ★別ファイルから独自の行動（スキル等）を注入するフック
         customUpdate: base.customUpdate || null
     };
 };
 
-// 現在マップ上に存在する敵の配列
 window.enemies = [];
 
-// --- 敵の更新（AIロジック） ---
 window.updateEnemies = function(dt) {
     for (let i = 0; i < window.enemies.length; i++) {
         let e = window.enemies[i];
 
-        // 1. 死亡判定とドロップ処理
         if (e.hp <= 0 && e.state !== 'dead') {
             e.state = 'dead'; e.timers.respawn = e.baseRespawnTime; 
             
@@ -349,7 +330,6 @@ window.updateEnemies = function(dt) {
                 }
             }
             
-            // 確率ドロップテーブルの処理
             if (e.dropTable && e.dropTable.length > 0 && window.ITEM_DB) {
                 e.dropTable.forEach(drop => {
                     if (Math.random() <= drop.chance) {
@@ -371,7 +351,6 @@ window.updateEnemies = function(dt) {
             continue; 
         }
 
-        // 2. リスポーン待機
         if (e.state === 'dead') {
             e.timers.respawn -= dt;
             if (e.timers.respawn <= 0) {
@@ -379,7 +358,6 @@ window.updateEnemies = function(dt) {
                 e.x = safePos.x; e.y = safePos.y; e.targetX = e.x; e.targetY = e.y; 
                 e.hp = e.maxHp; e.state = 'idle'; e.hasBeenAttacked = false; 
                 e.hateTable = {}; e.damageTable = {}; e.path = []; e.effects = []; e.effectCounts = {};
-                // 自己バフなどの状態も初期化
                 if (window.ENEMY_DB && window.ENEMY_DB[e.id]) {
                     e.armor = window.ENEMY_DB[e.id].baseArmor || 0;
                 }
@@ -419,7 +397,6 @@ window.updateEnemies = function(dt) {
             if (distToTarget <= e.attackRange) {
                 e.state = 'attack'; e.path = [];
                 if (e.attackCooldown <= 0 && !isFrozen) { 
-                    // アーマーによるダメージ軽減
                     const actualDamage = Math.max(1, e.attackDamage * (100 / (100 + window.player.armor))); 
                     currentTarget.hp -= actualDamage; 
                     
@@ -488,9 +465,6 @@ window.updateEnemies = function(dt) {
             } 
         }
 
-        // =====================================================
-        // エリアごとの個別JSで定義されたボス固有のAIなどを実行するフック
-        // =====================================================
         if (e.customUpdate && typeof e.customUpdate === 'function') {
             e.customUpdate(e, dt, window.player);
         }
