@@ -14,8 +14,9 @@
         if (!document.getElementById('skillStyle')) {
             const style = document.createElement('style');
             style.id = 'skillStyle';
+            // ★変更: #buffContainer の絶対座標(top, left)指定を削除し、動的配置に任せる
             style.innerHTML = `
-                #buffContainer { position: absolute; top: 75px; left: 15px; display: flex; gap: 8px; pointer-events: auto; z-index: 55; }
+                #buffContainer { position: absolute; display: flex; gap: 8px; pointer-events: auto; z-index: 55; }
                 .buff-slot { width: 32px; height: 32px; background: rgba(20,20,20,0.8); border: 1px solid #777; border-radius: 4px; position: relative; cursor: pointer; display: flex; justify-content: center; align-items: center; box-shadow: 0 2px 4px rgba(0,0,0,0.5); }
                 .buff-time { position: absolute; bottom: -16px; left: 50%; transform: translateX(-50%); font-size: 10px; color: white; text-shadow: 1px 1px 1px black, -1px -1px 1px black, 1px -1px 1px black, -1px 1px 1px black; font-weight: bold; }
                 .buff-icon-emoji { font-size: 20px; line-height: 1; }
@@ -86,7 +87,6 @@
             if (calcData.targetType === 'enemy' && window.player.targetEnemy && window.player.targetEnemy.state !== 'dead') {
                 validTarget = window.player.targetEnemy;
             }
-            // ※味方対象の場合は、現状オートターゲットがないため手動選択(targetingSkill)に回す
 
             if (validTarget) {
                 window.player.pendingSkill = skillItem;
@@ -148,11 +148,9 @@
                     }
                 }
             } else if (calcData.targetType === 'ally') {
-                // 自分自身をタップした場合の判定
                 if (Math.hypot(window.player.x - targetX, window.player.y - targetY) <= window.player.radius + 15) {
                     clickedTarget = window.player;
                 }
-                // ※将来マルチプレイヤー対応時、ここに他プレイヤーのタップ判定を追加
             }
 
             if (clickedTarget) {
@@ -315,8 +313,18 @@
     window.renderBuffsUI = function() {
         const container = document.getElementById('buffContainer');
         if (!container) return;
+
+        // ★変更: プレイヤーウィジェットの現在の座標から相対位置でバフを配置
+        const pWidget = document.getElementById('playerWidget');
+        if (pWidget) {
+            const rect = pWidget.getBoundingClientRect();
+            // playerWidget の左上角を基準に配置 (例: 下に65px, 右に5px)
+            container.style.top = (rect.top + 65) + 'px';
+            container.style.left = (rect.left + 5) + 'px';
+        }
+
         container.innerHTML = '';
-        if (!window.player.activeBuffs) return;
+        if (!window.player || !window.player.activeBuffs) return;
 
         window.player.activeBuffs.forEach((buff, idx) => {
             const slot = document.createElement('div');
@@ -407,27 +415,23 @@
         if(typeof window.updateWidgetUI === 'function') window.updateWidgetUI();
         if (typeof window.addLog === 'function') window.addLog(`<span class='color-status'>${skill.name} を発動！</span>`, 'sys');
 
-        // ★変更: ターゲットの収集（単体・円範囲）
         let targets = [];
         if (targetType === 'self') {
             targets.push(window.player);
         } else {
             if (areaType === 'circle') {
-                // デフォルトの範囲半径(例:50) + スキル範囲拡張(area_up)による増加分
                 let areaRadius = 50; 
                 effects.forEach(e => { if(e.type === 'area_up') areaRadius += (e.value * 10); });
                 
                 if (targetType === 'enemy') {
                     window.enemies.forEach(e => {
-                        // ターゲットを中心に指定半径内の敵を巻き込む
                         if (e.state !== 'dead' && Math.hypot(e.x - target.x, e.y - target.y) <= areaRadius) targets.push(e);
                     });
                 } else if (targetType === 'ally') {
-                    // 味方円範囲の場合、自身を含める
                     if (Math.hypot(window.player.x - target.x, window.player.y - target.y) <= areaRadius) targets.push(window.player);
                 }
             } else {
-                targets.push(target); // 単体
+                targets.push(target);
             }
         }
 
