@@ -27,7 +27,6 @@
     window.initShopUI = function() {
         const shopWin = document.createElement('div');
         shopWin.id = 'shopWindow';
-        // ★修正: touch-action: none; を削除し、スクロールを可能にしました
         shopWin.style.cssText = 'position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); display:none; flex-direction:column; width:95vw; max-width:850px; height:85vh; max-height:600px; background:rgba(20,20,30,0.95); border:2px solid #aaa; border-radius:8px; z-index:75; color:#fff; pointer-events:auto; box-shadow:0 10px 30px rgba(0,0,0,0.9);';
         
         shopWin.addEventListener('pointerdown', (e) => {
@@ -52,11 +51,9 @@
                 </div>
 
                 <div style="flex:1; display:flex; flex-direction:column; background:rgba(0,0,0,0.5); position:relative;">
-                    <!-- ★修正: 縦スクロール(pan-y)を明示的に許可 -->
                     <div id="shopBuyArea" style="flex:1; overflow-y:auto; padding:10px; display:flex; flex-direction:column; gap:5px; touch-action:pan-y;"></div>
                     
                     <div id="shopSellArea" style="flex:1; display:none; flex-direction:column;">
-                        <!-- ★修正: 縦スクロール(pan-y)を明示的に許可 -->
                         <div id="shopCartSlots" style="flex:1; overflow-y:auto; padding:10px; display:grid; grid-template-columns:repeat(4, 1fr); grid-auto-rows:max-content; gap:5px; align-content:start; touch-action:pan-y;"></div>
                         
                         <div style="padding:10px; border-top:1px solid #555; background:rgba(20,20,20,0.8); display:flex; justify-content:space-between; align-items:center; touch-action:none;">
@@ -72,7 +69,6 @@
                     </div>
                 </div>
 
-                <!-- ★修正: 詳細ペインにも縦スクロール(pan-y)を許可 -->
                 <div style="width:100px; background:rgba(30,30,40,0.9); border-left:1px solid #555; padding:10px; box-sizing:border-box; display:flex; flex-direction:column; gap:10px; overflow-y:auto; touch-action:pan-y;">
                     <div id="shopDetailEmpty" style="color:#888; text-align:center; margin-top:50px; font-size:12px;">アイテムを選択</div>
                     
@@ -259,7 +255,9 @@
                     if (invItem.count > cartItem.count) invItem.count -= cartItem.count;
                     else window.player.inventory[foundTab].items.splice(foundIdx, 1);
                     
-                    const basePrice = invItem.price || (window.ITEM_DB && window.ITEM_DB[invItem.id] ? window.ITEM_DB[invItem.id].price : 0) || 0;
+                    // ★修正: インベントリのアイテムIDとレアリティを使って、DBから正しい価格データを持つアイテムを生成する
+                    const dbItemData = window.createItemWithRarity ? window.createItemWithRarity(invItem.id, invItem.rarity) : (window.ITEM_DB[invItem.id] || invItem);
+                    const basePrice = dbItemData.price || 0;
                     const unitPrice = Math.floor(basePrice / 10);
                     
                     totalGold += unitPrice * cartItem.count;
@@ -347,7 +345,9 @@
                         <div class="shop-slot-remove" style="position:absolute; top:-5px; right:-5px; width:20px; height:20px; background:#ff4444; color:#fff; border-radius:50%; display:flex; justify-content:center; align-items:center; font-size:12px; font-weight:bold; cursor:pointer; z-index:10; box-shadow:0 2px 4px rgba(0,0,0,0.5);">×</div>
                     `;
                     
-                    const basePrice = cartItem.item.price || (window.ITEM_DB && window.ITEM_DB[cartItem.item.id] ? window.ITEM_DB[cartItem.item.id].price : 0) || 0;
+                    // ★修正: インベントリのアイテムIDとレアリティを使って、DBから正しい価格データを持つアイテムを生成する
+                    const dbItemData = window.createItemWithRarity ? window.createItemWithRarity(cartItem.item.id, cartItem.item.rarity) : (window.ITEM_DB[cartItem.item.id] || cartItem.item);
+                    const basePrice = dbItemData.price || 0;
                     const unitPrice = Math.floor(basePrice / 10);
                     
                     totalSellPrice += unitPrice * cartItem.count;
@@ -410,7 +410,9 @@
                 document.getElementById('shopDetailName').innerText = cartItem.item.name;
                 document.getElementById('shopDetailDesc').innerText = cartItem.item.desc || '';
                 
-                const basePrice = cartItem.item.price || (window.ITEM_DB && window.ITEM_DB[cartItem.item.id] ? window.ITEM_DB[cartItem.item.id].price : 0) || 0;
+                // ★修正: インベントリのアイテムIDとレアリティを使って、DBから正しい価格データを持つアイテムを生成する
+                const dbItemData = window.createItemWithRarity ? window.createItemWithRarity(cartItem.item.id, cartItem.item.rarity) : (window.ITEM_DB[cartItem.item.id] || cartItem.item);
+                const basePrice = dbItemData.price || 0;
                 const unitPrice = Math.floor(basePrice / 10);
                 
                 const rarityColor = window.RARITY && window.RARITY[cartItem.item.rarity] ? window.RARITY[cartItem.item.rarity].color : '#fff';
@@ -443,8 +445,11 @@
         let currentVal = 1; 
         const maxVal = item.count || 1;
         
-        const basePrice = item.price || (window.ITEM_DB && window.ITEM_DB[item.id] ? window.ITEM_DB[item.id].price : 0) || 0;
+        // ★修正: インベントリのアイテムIDとレアリティを使って、DBから正しい価格データを持つアイテムを生成する
+        const dbItemData = window.createItemWithRarity ? window.createItemWithRarity(item.id, item.rarity) : (window.ITEM_DB[item.id] || item);
+        const basePrice = dbItemData.price || 0;
         const unitPrice = Math.floor(basePrice / 10);
+        
         const descText = (item.desc || '').replace(/\\n/g, '<br>');
         const amountCtrlDisplay = maxVal > 1 ? 'block' : 'none';
         const rarityColor = window.RARITY && window.RARITY[item.rarity] ? window.RARITY[item.rarity].color : '#fff';
