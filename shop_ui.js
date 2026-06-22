@@ -1,6 +1,7 @@
 // =========================================================
 // shop_ui.js
 // 街のショップNPC専用のUI（購入・売却カートシステム）の完全版
+// スクロール修正・DB価格参照対応版
 // =========================================================
 
 (function() {
@@ -29,10 +30,16 @@
         shopWin.id = 'shopWindow';
         shopWin.style.cssText = 'position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); display:none; flex-direction:column; width:95vw; max-width:850px; height:85vh; max-height:600px; background:rgba(20,20,30,0.95); border:2px solid #aaa; border-radius:8px; z-index:75; color:#fff; pointer-events:auto; box-shadow:0 10px 30px rgba(0,0,0,0.9);';
         
+        // ★修正: タッチ操作などのイベント伝播を停止し、ウィンドウ内のスクロールを機能させる
         shopWin.addEventListener('pointerdown', (e) => {
             e.stopPropagation();
             if(window.bringToFront) window.bringToFront('shopWindow');
         });
+        shopWin.addEventListener('pointermove', (e) => e.stopPropagation());
+        shopWin.addEventListener('pointerup', (e) => e.stopPropagation());
+        shopWin.addEventListener('wheel', (e) => e.stopPropagation(), {passive: true});
+        shopWin.addEventListener('touchstart', (e) => e.stopPropagation(), {passive: true});
+        shopWin.addEventListener('touchmove', (e) => e.stopPropagation(), {passive: true});
 
         shopWin.innerHTML = `
             <div id="shopTitleBar" style="padding:10px; background:linear-gradient(to right, #445, #223); border-bottom:1px solid #777; border-radius:6px 6px 0 0; display:flex; justify-content:space-between; align-items:center; touch-action:none;">
@@ -69,7 +76,7 @@
                     </div>
                 </div>
 
-                <div style="width:100px; background:rgba(30,30,40,0.9); border-left:1px solid #555; padding:10px; box-sizing:border-box; display:flex; flex-direction:column; gap:10px; overflow-y:auto; touch-action:pan-y;">
+                <div id="shopRightPanel" style="width:100px; background:rgba(30,30,40,0.9); border-left:1px solid #555; padding:10px; box-sizing:border-box; display:flex; flex-direction:column; gap:10px; overflow-y:auto; touch-action:pan-y;">
                     <div id="shopDetailEmpty" style="color:#888; text-align:center; margin-top:50px; font-size:12px;">アイテムを選択</div>
                     
                     <div id="shopDetailContent" style="display:none; flex-direction:column; gap:10px;">
@@ -255,7 +262,6 @@
                     if (invItem.count > cartItem.count) invItem.count -= cartItem.count;
                     else window.player.inventory[foundTab].items.splice(foundIdx, 1);
                     
-                    // ★修正: インベントリのアイテムIDとレアリティを使って、DBから正しい価格データを持つアイテムを生成する
                     const dbItemData = window.createItemWithRarity ? window.createItemWithRarity(invItem.id, invItem.rarity) : (window.ITEM_DB[invItem.id] || invItem);
                     const basePrice = dbItemData.price || 0;
                     const unitPrice = Math.floor(basePrice / 10);
@@ -345,7 +351,6 @@
                         <div class="shop-slot-remove" style="position:absolute; top:-5px; right:-5px; width:20px; height:20px; background:#ff4444; color:#fff; border-radius:50%; display:flex; justify-content:center; align-items:center; font-size:12px; font-weight:bold; cursor:pointer; z-index:10; box-shadow:0 2px 4px rgba(0,0,0,0.5);">×</div>
                     `;
                     
-                    // ★修正: インベントリのアイテムIDとレアリティを使って、DBから正しい価格データを持つアイテムを生成する
                     const dbItemData = window.createItemWithRarity ? window.createItemWithRarity(cartItem.item.id, cartItem.item.rarity) : (window.ITEM_DB[cartItem.item.id] || cartItem.item);
                     const basePrice = dbItemData.price || 0;
                     const unitPrice = Math.floor(basePrice / 10);
@@ -410,7 +415,6 @@
                 document.getElementById('shopDetailName').innerText = cartItem.item.name;
                 document.getElementById('shopDetailDesc').innerText = cartItem.item.desc || '';
                 
-                // ★修正: インベントリのアイテムIDとレアリティを使って、DBから正しい価格データを持つアイテムを生成する
                 const dbItemData = window.createItemWithRarity ? window.createItemWithRarity(cartItem.item.id, cartItem.item.rarity) : (window.ITEM_DB[cartItem.item.id] || cartItem.item);
                 const basePrice = dbItemData.price || 0;
                 const unitPrice = Math.floor(basePrice / 10);
@@ -435,17 +439,23 @@
             modal.id = 'shopSellCountModal';
             modal.style.cssText = 'position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); width:260px; background:rgba(20,20,30,0.95); border:2px solid #aaa; border-radius:8px; z-index:100; color:#fff; display:none; flex-direction:column; padding:15px; box-shadow:0 10px 30px rgba(0,0,0,0.9); pointer-events:auto;';
             
+            // ★修正: こちらもイベント伝播を止める
             modal.addEventListener('pointerdown', (e) => {
                 e.stopPropagation();
                 if(window.bringToFront) window.bringToFront('shopSellCountModal');
             });
+            modal.addEventListener('pointermove', (e) => e.stopPropagation());
+            modal.addEventListener('pointerup', (e) => e.stopPropagation());
+            modal.addEventListener('wheel', (e) => e.stopPropagation(), {passive: true});
+            modal.addEventListener('touchstart', (e) => e.stopPropagation(), {passive: true});
+            modal.addEventListener('touchmove', (e) => e.stopPropagation(), {passive: true});
+            
             document.getElementById('ui-layer').appendChild(modal);
         }
         
         let currentVal = 1; 
         const maxVal = item.count || 1;
         
-        // ★修正: インベントリのアイテムIDとレアリティを使って、DBから正しい価格データを持つアイテムを生成する
         const dbItemData = window.createItemWithRarity ? window.createItemWithRarity(item.id, item.rarity) : (window.ITEM_DB[item.id] || item);
         const basePrice = dbItemData.price || 0;
         const unitPrice = Math.floor(basePrice / 10);
