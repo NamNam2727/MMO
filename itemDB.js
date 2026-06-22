@@ -61,13 +61,9 @@ window.ITEM_DB = {
     },
 
     // --- 消費・素材 ---
-    'potion_small': { 
-        id: 'potion_small', type: 'consume', name: '小型ポーション', 
-        rarity: 'Common', maxStack: 99, color: '#00ff00', desc: 'HPを30回復する。', restore: 30, price: 50 
-    },
-    'slime_jelly': { 
-        id: 'slime_jelly', type: 'etc', name: 'スライムの粘液', 
-        rarity: 'Common', maxStack: 99, color: '#00aaaa', desc: 'ベタベタする素材。', price: 10 
+    'hp_potion': { 
+        id: 'hp_potion', type: 'consume', name: 'HP回復ポーション', 
+        rarity: 'Common', maxStack: 99, color: '#00ff00', desc: 'HPを30%回復する。', restore: 30, price: 50 
     },
 
     // ==========================================
