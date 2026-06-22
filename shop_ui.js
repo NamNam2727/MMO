@@ -9,7 +9,7 @@
         npc: null,
         mode: 'buy', 
         cart: Array(24).fill(null), 
-        selectedBuyItemIdx: -1, // ★修正: IDではなく配列の何番目かで管理する
+        selectedBuyItemIdx: -1,
         selectedSellSlot: -1,
         buyCount: 1
     };
@@ -27,7 +27,8 @@
     window.initShopUI = function() {
         const shopWin = document.createElement('div');
         shopWin.id = 'shopWindow';
-        shopWin.style.cssText = 'position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); display:none; flex-direction:column; width:95vw; max-width:850px; height:85vh; max-height:600px; background:rgba(20,20,30,0.95); border:2px solid #aaa; border-radius:8px; z-index:75; color:#fff; pointer-events:auto; touch-action:none; box-shadow:0 10px 30px rgba(0,0,0,0.9);';
+        // ★修正: touch-action: none; を削除し、スクロールを可能にしました
+        shopWin.style.cssText = 'position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); display:none; flex-direction:column; width:95vw; max-width:850px; height:85vh; max-height:600px; background:rgba(20,20,30,0.95); border:2px solid #aaa; border-radius:8px; z-index:75; color:#fff; pointer-events:auto; box-shadow:0 10px 30px rgba(0,0,0,0.9);';
         
         shopWin.addEventListener('pointerdown', (e) => {
             e.stopPropagation();
@@ -35,7 +36,7 @@
         });
 
         shopWin.innerHTML = `
-            <div id="shopTitleBar" style="padding:10px; background:linear-gradient(to right, #445, #223); border-bottom:1px solid #777; border-radius:6px 6px 0 0; display:flex; justify-content:space-between; align-items:center;">
+            <div id="shopTitleBar" style="padding:10px; background:linear-gradient(to right, #445, #223); border-bottom:1px solid #777; border-radius:6px 6px 0 0; display:flex; justify-content:space-between; align-items:center; touch-action:none;">
                 <div style="font-weight:bold; font-size:16px;">ショップ - <span id="shopNpcName">商人</span></div>
                 <div style="display:flex; align-items:center; gap:15px;">
                     <div style="color:#ffd700; font-weight:bold; font-size:16px;">所持金: <span id="shopPlayerGold">0</span> 星粒</div>
@@ -45,18 +46,20 @@
 
             <div style="display:flex; flex:1; overflow:hidden;">
                 
-                <div style="width:45px; background:rgba(0,0,0,0.3); border-right:1px solid #555; display:flex; flex-direction:column; align-items:center; padding-top:10px; gap:10px;">
+                <div style="width:45px; background:rgba(0,0,0,0.3); border-right:1px solid #555; display:flex; flex-direction:column; align-items:center; padding-top:10px; gap:10px; touch-action:none;">
                     <div id="shopTabBuy" class="shop-tab" style="width:36px; height:36px; background:#4CAF50; border:2px solid #fff; border-radius:50%; display:flex; justify-content:center; align-items:center; font-weight:bold; font-size:10px; cursor:pointer; box-shadow:0 0 10px rgba(76,175,80,0.5);">かう</div>
                     <div id="shopTabSell" class="shop-tab" style="width:36px; height:36px; background:#555; border:2px solid #777; border-radius:50%; display:flex; justify-content:center; align-items:center; font-weight:bold; font-size:10px; cursor:pointer;">うる</div>
                 </div>
 
                 <div style="flex:1; display:flex; flex-direction:column; background:rgba(0,0,0,0.5); position:relative;">
-                    <div id="shopBuyArea" style="flex:1; overflow-y:auto; padding:10px; display:flex; flex-direction:column; gap:5px;"></div>
+                    <!-- ★修正: 縦スクロール(pan-y)を明示的に許可 -->
+                    <div id="shopBuyArea" style="flex:1; overflow-y:auto; padding:10px; display:flex; flex-direction:column; gap:5px; touch-action:pan-y;"></div>
                     
                     <div id="shopSellArea" style="flex:1; display:none; flex-direction:column;">
-                        <div id="shopCartSlots" style="flex:1; overflow-y:auto; padding:10px; display:grid; grid-template-columns:repeat(4, 1fr); grid-auto-rows:max-content; gap:5px; align-content:start;"></div>
+                        <!-- ★修正: 縦スクロール(pan-y)を明示的に許可 -->
+                        <div id="shopCartSlots" style="flex:1; overflow-y:auto; padding:10px; display:grid; grid-template-columns:repeat(4, 1fr); grid-auto-rows:max-content; gap:5px; align-content:start; touch-action:pan-y;"></div>
                         
-                        <div style="padding:10px; border-top:1px solid #555; background:rgba(20,20,20,0.8); display:flex; justify-content:space-between; align-items:center;">
+                        <div style="padding:10px; border-top:1px solid #555; background:rgba(20,20,20,0.8); display:flex; justify-content:space-between; align-items:center; touch-action:none;">
                             <button id="shopOpenBagBtn" style="padding:8px 12px; background:#336699; color:#fff; border:none; border-radius:4px; font-weight:bold; cursor:pointer;">バッグを開く</button>
                             
                             <div style="display:flex; flex-direction:column; align-items:center; font-weight:bold;">
@@ -69,7 +72,8 @@
                     </div>
                 </div>
 
-                <div style="width:100px; background:rgba(30,30,40,0.9); border-left:1px solid #555; padding:10px; box-sizing:border-box; display:flex; flex-direction:column; gap:10px; overflow-y:auto;">
+                <!-- ★修正: 詳細ペインにも縦スクロール(pan-y)を許可 -->
+                <div style="width:100px; background:rgba(30,30,40,0.9); border-left:1px solid #555; padding:10px; box-sizing:border-box; display:flex; flex-direction:column; gap:10px; overflow-y:auto; touch-action:pan-y;">
                     <div id="shopDetailEmpty" style="color:#888; text-align:center; margin-top:50px; font-size:12px;">アイテムを選択</div>
                     
                     <div id="shopDetailContent" style="display:none; flex-direction:column; gap:10px;">
@@ -291,7 +295,6 @@
 
             areaBuy.innerHTML = '';
             
-            // ★修正: レアリティ指定データに対応し、インデックスで管理するように変更
             window.shopState.npc.shopItems.forEach((shopItemDef, idx) => {
                 const itemId = typeof shopItemDef === 'string' ? shopItemDef : shopItemDef.id;
                 const targetRarity = typeof shopItemDef === 'string' ? null : shopItemDef.rarity;
@@ -335,7 +338,6 @@
                     slotDiv.style.borderStyle = 'solid'; slotDiv.style.borderWidth = '2px';
                     slotDiv.style.borderColor = window.shopState.selectedSellSlot === i ? '#e94560' : '#888';
                     
-                    // レアリティカラーを枠線に反映
                     const rarityColor = window.RARITY && window.RARITY[cartItem.item.rarity] ? window.RARITY[cartItem.item.rarity].color : '#888';
                     slotDiv.style.borderColor = window.shopState.selectedSellSlot === i ? '#e94560' : rarityColor;
 
@@ -384,7 +386,6 @@
             document.getElementById('shopDetailDesc').innerText = itemData.desc || '';
             document.getElementById('shopDetailUnitPrice').innerText = `${itemData.price || 0} 星粒`;
             
-            // 色もレアリティカラーに変更
             const rarityColor = window.RARITY && window.RARITY[itemData.rarity] ? window.RARITY[itemData.rarity].color : '#fff';
             document.getElementById('shopDetailName').style.color = rarityColor;
             
