@@ -27,7 +27,6 @@
     window.initShopUI = function() {
         const shopWin = document.createElement('div');
         shopWin.id = 'shopWindow';
-        // z-index:75でステータス(70)より確実に手前に表示
         shopWin.style.cssText = 'position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); display:none; flex-direction:column; width:95vw; max-width:850px; height:85vh; max-height:600px; background:rgba(20,20,30,0.95); border:2px solid #aaa; border-radius:8px; z-index:75; color:#fff; pointer-events:auto; touch-action:none; box-shadow:0 10px 30px rgba(0,0,0,0.9);';
         
         shopWin.addEventListener('pointerdown', (e) => {
@@ -39,7 +38,7 @@
             <div id="shopTitleBar" style="padding:10px; background:linear-gradient(to right, #445, #223); border-bottom:1px solid #777; border-radius:6px 6px 0 0; display:flex; justify-content:space-between; align-items:center;">
                 <div style="font-weight:bold; font-size:16px;">ショップ - <span id="shopNpcName">商人</span></div>
                 <div style="display:flex; align-items:center; gap:15px;">
-                    <div style="color:#ffd700; font-weight:bold; font-size:16px;">所持金: <span id="shopPlayerGold">0</span> G</div>
+                    <div style="color:#ffd700; font-weight:bold; font-size:16px;">所持金: <span id="shopPlayerGold">0</span> 星粒</div>
                     <div id="shopCloseBtn" style="cursor:pointer; font-size:20px; font-weight:bold; color:#ff5555; padding:0 10px;">×</div>
                 </div>
             </div>
@@ -62,7 +61,7 @@
                             
                             <div style="display:flex; flex-direction:column; align-items:center; font-weight:bold;">
                                 <span style="font-size:12px; color:#fff;">売却額:</span>
-                                <span id="shopTotalSellPrice" style="color:#ffd700; font-size:16px;">0 G</span>
+                                <span id="shopTotalSellPrice" style="color:#ffd700; font-size:16px;">0 星粒</span>
                             </div>
                             
                             <button id="shopSellAllBtn" style="padding:8px 16px; background:#e94560; color:#fff; border:none; border-radius:4px; font-weight:bold; cursor:pointer;">全て売る</button>
@@ -80,11 +79,12 @@
                         </div>
                         <div id="shopDetailDesc" style="font-size:10px; color:#ccc; line-height:1.4; min-height:30px;"></div>
                         
-                        <div style="font-size:11px; color:#ffd700; text-align:center;">単価:<br><span id="shopDetailUnitPrice" style="font-size:13px; font-weight:bold;">0 G</span></div>
+                        <div style="font-size:11px; color:#ffd700; text-align:center;">単価:<br><span id="shopDetailUnitPrice" style="font-size:13px; font-weight:bold;">0 星粒</span></div>
                         
                         <hr style="border:0; border-top:1px solid #555; width:100%; margin:2px 0;" />
                         
                         <div id="shopBuyActionArea" style="display:none; flex-direction:column; gap:8px;">
+                            <!-- ★修正: 装備品などでスタック不可の場合は、この AmountCtrl ごと非表示になります -->
                             <div id="shopBuyAmountCtrl" style="display:flex; flex-direction:column; gap:5px; background:rgba(0,0,0,0.3); padding:5px; border-radius:4px;">
                                 <div style="display:flex; justify-content:space-between; align-items:center;">
                                     <button id="shopBuyMinus" style="width:24px; height:24px; background:#555; color:#fff; border:none; border-radius:4px; font-size:14px;">-</button>
@@ -95,7 +95,7 @@
                             </div>
                             <div style="display:flex; flex-direction:column; align-items:center; font-weight:bold;">
                                 <span style="font-size:10px;">合計:</span>
-                                <span id="shopBuyTotalPrice" style="color:#ffd700; font-size:13px;">0 G</span>
+                                <span id="shopBuyTotalPrice" style="color:#ffd700; font-size:13px;">0 星粒</span>
                             </div>
                             <button id="shopBuyBtn" style="padding:8px 5px; background:#4CAF50; color:#fff; border:none; border-radius:4px; font-weight:bold; font-size:12px; cursor:pointer;">購入する</button>
                         </div>
@@ -107,7 +107,7 @@
                             </div>
                             <div style="display:flex; flex-direction:column; align-items:center; font-weight:bold; font-size:12px;">
                                 <span style="font-size:10px;">小計:</span>
-                                <span id="shopSellDetailTotal" style="color:#ffd700; font-size:13px;">0 G</span>
+                                <span id="shopSellDetailTotal" style="color:#ffd700; font-size:13px;">0 星粒</span>
                             </div>
                             <button id="shopSellReturnBtn" style="padding:8px 5px; background:#555; color:#fff; border:none; border-radius:4px; font-weight:bold; font-size:12px; cursor:pointer;">バッグに戻す</button>
                         </div>
@@ -130,10 +130,14 @@
         const updateBuyCount = (val) => {
             const itemData = window.ITEM_DB[window.shopState.selectedBuyItemId];
             if (!itemData) return;
-            window.shopState.buyCount = Math.max(1, Math.min(99, val));
+            // ★修正: スタック上限が1（または未設定で1扱い）の場合は、上限を1に固定
+            const maxStack = itemData.maxStack || 1;
+            const maxVal = maxStack === 1 ? 1 : 99;
+            
+            window.shopState.buyCount = Math.max(1, Math.min(maxVal, val));
             document.getElementById('shopBuySlider').value = window.shopState.buyCount;
             document.getElementById('shopBuyCountText').innerText = window.shopState.buyCount;
-            document.getElementById('shopBuyTotalPrice').innerText = `${(itemData.price || 0) * window.shopState.buyCount} G`;
+            document.getElementById('shopBuyTotalPrice').innerText = `${(itemData.price || 0) * window.shopState.buyCount} 星粒`;
         };
         document.getElementById('shopBuyMinus').onclick = () => updateBuyCount(window.shopState.buyCount - 1);
         document.getElementById('shopBuyPlus').onclick = () => updateBuyCount(window.shopState.buyCount + 1);
@@ -195,7 +199,9 @@
         document.getElementById('shopWindow').style.display = 'none';
         window.shopState.cart = Array(24).fill(null); 
         
-        if (window.player) window.player.targetNpc = null;
+        if (window.player) {
+            window.player.targetNpc = null;
+        }
 
         if (window.invWindow && window.invWindow.style.display === 'flex') { if(typeof window.toggleInventory === 'function') window.toggleInventory(); }
         if (typeof window.renderInventory === 'function') window.renderInventory();
@@ -208,7 +214,7 @@
         
         const totalCost = (itemData.price || 0) * window.shopState.buyCount;
         if (window.player.gold < totalCost) {
-            if(typeof window.addLog === 'function') window.addLog(`<span class='color-sys'>Goldが足りない！</span>`, 'sys');
+            if(typeof window.addLog === 'function') window.addLog(`<span class='color-sys'>星粒が足りない！</span>`, 'sys');
             return;
         }
         
@@ -250,7 +256,7 @@
 
         if (itemsSold > 0) {
             window.player.gold += totalGold;
-            if (typeof window.addLog === 'function') window.addLog(`<span class='color-sys'>アイテムを売却し、<span class='color-item'>${totalGold} G</span> を得た。</span>`, 'sys');
+            if (typeof window.addLog === 'function') window.addLog(`<span class='color-sys'>アイテムを売却し、<span class='color-item'>${totalGold} 星粒</span> を得た。</span>`, 'sys');
             window.shopState.selectedSellSlot = -1;
             window.renderShopUI();
             if (typeof window.renderInventory === 'function') window.renderInventory();
@@ -281,7 +287,7 @@
                 row.innerHTML = `
                     <div style="width:36px; height:36px; background:#000; border:1px solid #777; border-radius:4px; display:flex; justify-content:center; align-items:center; font-size:18px;">${window.getItemIconHTML(itemData)}</div>
                     <div style="flex:1; font-weight:bold; font-size:14px;">${itemData.name}</div>
-                    <div style="color:#ffd700; font-weight:bold; font-size:14px;">${itemData.price || 0} G</div>
+                    <div style="color:#ffd700; font-weight:bold; font-size:14px;">${itemData.price || 0} 星粒</div>
                 `;
                 row.onclick = () => { window.shopState.selectedBuyItemId = itemId; window.shopState.buyCount = 1; window.renderShopUI(); };
                 areaBuy.appendChild(row);
@@ -329,7 +335,7 @@
                 };
                 slotsDiv.appendChild(slotDiv);
             }
-            document.getElementById('shopTotalSellPrice').innerText = `${totalSellPrice} G`;
+            document.getElementById('shopTotalSellPrice').innerText = `${totalSellPrice} 星粒`;
         }
 
         const detailEmpty = document.getElementById('shopDetailEmpty');
@@ -342,11 +348,21 @@
             document.getElementById('shopDetailIcon').innerHTML = window.getItemIconHTML(itemData);
             document.getElementById('shopDetailName').innerText = itemData.name;
             document.getElementById('shopDetailDesc').innerText = itemData.desc || '';
-            document.getElementById('shopDetailUnitPrice').innerText = `${itemData.price || 0} G`;
+            document.getElementById('shopDetailUnitPrice').innerText = `${itemData.price || 0} 星粒`;
+            
+            // ★修正: 装備品などでスタック上限が1の場合は、数量選択コントロール自体を隠す
+            const maxStack = itemData.maxStack || 1;
+            if (maxStack === 1) {
+                document.getElementById('shopBuyAmountCtrl').style.display = 'none';
+                window.shopState.buyCount = 1;
+            } else {
+                document.getElementById('shopBuyAmountCtrl').style.display = 'flex';
+            }
             
             document.getElementById('shopBuySlider').value = window.shopState.buyCount;
             document.getElementById('shopBuyCountText').innerText = window.shopState.buyCount;
-            document.getElementById('shopBuyTotalPrice').innerText = `${(itemData.price || 0) * window.shopState.buyCount} G`;
+            document.getElementById('shopBuyTotalPrice').innerText = `${(itemData.price || 0) * window.shopState.buyCount} 星粒`;
+            
         } else if (window.shopState.mode === 'sell' && window.shopState.selectedSellSlot !== -1) {
             const cartItem = window.shopState.cart[window.shopState.selectedSellSlot];
             if (cartItem) {
@@ -357,16 +373,15 @@
                 document.getElementById('shopDetailDesc').innerText = cartItem.item.desc || '';
                 
                 const unitPrice = Math.floor((cartItem.item.price || 0) / 10);
-                document.getElementById('shopDetailUnitPrice').innerText = `${unitPrice} G`;
+                document.getElementById('shopDetailUnitPrice').innerText = `${unitPrice} 星粒`;
                 document.getElementById('shopSellDetailCount').innerText = `${cartItem.count}`;
-                document.getElementById('shopSellDetailTotal').innerText = `${unitPrice * cartItem.count} G`;
+                document.getElementById('shopSellDetailTotal').innerText = `${unitPrice * cartItem.count} 星粒`;
             } else { detailEmpty.style.display = 'block'; detailContent.style.display = 'none'; }
         } else {
             detailEmpty.style.display = 'block'; detailContent.style.display = 'none';
         }
     };
 
-    // ★修正: タップ時に開く、美しく機能的な「売却専用ポップアップ」に進化させました！
     window.promptShopSellCount = function(item, slotIdx) {
         if (!item) return;
         let modal = document.getElementById('shopSellCountModal');
@@ -382,9 +397,13 @@
             document.getElementById('ui-layer').appendChild(modal);
         }
         
-        let currentVal = 1; const maxVal = item.count;
+        let currentVal = 1; 
+        const maxVal = item.count || 1;
         const unitPrice = Math.floor((item.price || 0) / 10);
         const descText = (item.desc || '').replace(/\\n/g, '<br>');
+        
+        // ★修正: 売るアイテムが1個しかない場合（またはスタック不可）はスライダー部分を表示しない
+        const amountCtrlDisplay = maxVal > 1 ? 'block' : 'none';
         
         modal.innerHTML = `
             <div style="font-weight:bold; text-align:center; margin-bottom:10px; font-size:16px;">売却リストに追加</div>
@@ -393,16 +412,19 @@
                 <div style="width:44px; height:44px; background:#000; border:1px solid #777; border-radius:4px; display:flex; justify-content:center; align-items:center; font-size:24px;">${window.getItemIconHTML(item)}</div>
                 <div style="font-weight:bold; font-size:14px; text-align:center;">${item.name}</div>
                 <div style="font-size:11px; color:#ccc; line-height:1.4; text-align:center;">${descText}</div>
-                <div style="font-size:12px; color:#ffd700; margin-top:5px;">単価: ${unitPrice} G</div>
+                <div style="font-size:12px; color:#ffd700; margin-top:5px;">単価: ${unitPrice} 星粒</div>
             </div>
             
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-                <button id="shopSellCountMinus" style="width:40px; height:40px; background:#555; color:#fff; border:none; border-radius:4px; font-size:20px; font-weight:bold;">-</button>
-                <div id="shopSellCountText" style="font-size:20px; font-weight:bold;">${currentVal}</div>
-                <button id="shopSellCountPlus" style="width:40px; height:40px; background:#555; color:#fff; border:none; border-radius:4px; font-size:20px; font-weight:bold;">+</button>
+            <div id="shopSellAmountCtrl" style="display:${amountCtrlDisplay}; width:100%;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                    <button id="shopSellCountMinus" style="width:40px; height:40px; background:#555; color:#fff; border:none; border-radius:4px; font-size:20px; font-weight:bold;">-</button>
+                    <div id="shopSellCountText" style="font-size:20px; font-weight:bold;">${currentVal}</div>
+                    <button id="shopSellCountPlus" style="width:40px; height:40px; background:#555; color:#fff; border:none; border-radius:4px; font-size:20px; font-weight:bold;">+</button>
+                </div>
+                <input type="range" id="shopSellCountSlider" min="1" max="${maxVal}" value="${currentVal}" style="width:100%; margin-bottom:20px;">
             </div>
-            <input type="range" id="shopSellCountSlider" min="1" max="${maxVal}" value="${currentVal}" style="width:100%; margin-bottom:20px;">
-            <div style="display:flex; gap:10px;">
+            
+            <div style="display:flex; gap:10px; width:100%;">
                 <button id="shopSellCountCancel" style="flex:1; padding:10px; background:#555; color:#fff; border:none; border-radius:4px; font-weight:bold; cursor:pointer;">キャンセル</button>
                 <button id="shopSellCountOk" style="flex:1; padding:10px; background:#e94560; color:#fff; border:none; border-radius:4px; font-weight:bold; cursor:pointer;">リストに追加</button>
             </div>
@@ -412,19 +434,26 @@
         
         const updateVal = (val) => {
             currentVal = Math.max(1, Math.min(maxVal, val));
-            document.getElementById('shopSellCountSlider').value = currentVal;
-            document.getElementById('shopSellCountText').innerText = currentVal;
+            const slider = document.getElementById('shopSellCountSlider');
+            const text = document.getElementById('shopSellCountText');
+            if(slider) slider.value = currentVal;
+            if(text) text.innerText = currentVal;
         };
         
-        document.getElementById('shopSellCountMinus').onclick = () => updateVal(currentVal - 1);
-        document.getElementById('shopSellCountPlus').onclick = () => updateVal(currentVal + 1);
+        const btnMinus = document.getElementById('shopSellCountMinus');
+        if(btnMinus) btnMinus.onclick = () => updateVal(currentVal - 1);
+        
+        const btnPlus = document.getElementById('shopSellCountPlus');
+        if(btnPlus) btnPlus.onclick = () => updateVal(currentVal + 1);
         
         const sellSlider = document.getElementById('shopSellCountSlider');
-        sellSlider.oninput = (e) => updateVal(parseInt(e.target.value));
-        sellSlider.addEventListener('pointerdown', (e) => e.stopPropagation());
-        sellSlider.addEventListener('pointermove', (e) => e.stopPropagation());
-        sellSlider.addEventListener('touchstart', (e) => e.stopPropagation(), {passive: true});
-        sellSlider.addEventListener('touchmove', (e) => e.stopPropagation(), {passive: true});
+        if(sellSlider) {
+            sellSlider.oninput = (e) => updateVal(parseInt(e.target.value));
+            sellSlider.addEventListener('pointerdown', (e) => e.stopPropagation());
+            sellSlider.addEventListener('pointermove', (e) => e.stopPropagation());
+            sellSlider.addEventListener('touchstart', (e) => e.stopPropagation(), {passive: true});
+            sellSlider.addEventListener('touchmove', (e) => e.stopPropagation(), {passive: true});
+        }
         
         document.getElementById('shopSellCountCancel').onclick = () => { modal.style.display = 'none'; };
         
