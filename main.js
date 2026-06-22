@@ -267,7 +267,15 @@ function update(dt, timestamp) {
         const lootBtn = document.getElementById('lootBtn');
         if (lootBtn) lootBtn.style.display = isWorldMap ? 'none' : 'flex';
         
+        // ★追加: ワールドマップではバフUIを非表示にする
+        const buffContainer = document.getElementById('buffContainer');
+        if (buffContainer) buffContainer.style.display = isWorldMap ? 'none' : 'flex';
+        
         if (isWorldMap) {
+            // ★追加: ワールドマップに入った時にバフ詳細が開いていたら強制的に閉じる
+            const buffDetailWindow = document.getElementById('buffDetailWindow');
+            if (buffDetailWindow) buffDetailWindow.style.display = 'none';
+
             // ワールドマップでは移動しないため、移動フラグ等をリセット
             window.camera.x = 0;
             window.camera.y = 0;
