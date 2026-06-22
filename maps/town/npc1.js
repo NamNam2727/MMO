@@ -26,7 +26,10 @@ window.NPC_DB['town_merchant_1'] = {
         'potion_small',    // 文字列だけの指定も今まで通り可能
         'sword_wood',
         { id: 'sword_fire', rarity: 'Uncommon' }, // レアリティ指定販売
-        { id: 'chip_enemy_single_str', rarity: 'Rare' },
-        { id: 'chip_enemy_single_int', rarity: 'Epic' }
+        { id: 'chip_enemy_single_str', rarity: 'Uncommon' },
+        { id: 'chip_enemy_single_int', rarity: 'Uncommon' },
+        { id: 'chip_self_str', rarity: 'Uncommon' },
+        'etc_atk_up',
+        'etc_heal'
     ]
 };
