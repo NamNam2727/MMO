@@ -29,6 +29,7 @@ window.NPC_DB['town_merchant_1'] = {
         { id: 'chip_enemy_single_str', rarity: 'Uncommon' },
         { id: 'chip_enemy_single_int', rarity: 'Uncommon' },
         { id: 'chip_self_str', rarity: 'Uncommon' },
+        { id: 'chip_self_int', rarity: 'Uncommon' },
         'etc_atk_up',
         'etc_heal'
     ]
