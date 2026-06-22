@@ -98,6 +98,11 @@ window.ITEM_DB = {
         rarity: 'Common', maxStack: 99, color: '#aa8800', baseDesc: 'ちから依存/自身対象', 
         chipData: { capacity: 5, dependency: 'str', targetType: 'self', areaType: 'single' }, price: 40 
     },
+    'chip_self_int': { 
+        id: 'chip_self_int', type: 'consume', name: '自身チップ(まりょく)', 
+        rarity: 'Common', maxStack: 99, color: '#00aa77', baseDesc: 'まりょく依存/自身対象', 
+        chipData: { capacity: 5, dependency: 'int', targetType: 'self', areaType: 'single' }, price: 40 
+    },
     'chip_ally_single_int': { 
         id: 'chip_ally_single_int', type: 'consume', name: '味方単体チップ(まりょく)', 
         rarity: 'Common', maxStack: 99, color: '#00aa55', baseDesc: 'まりょく依存/味方単体', 
