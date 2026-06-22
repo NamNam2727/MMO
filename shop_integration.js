@@ -38,7 +38,6 @@
 
     // ----------------------------------------------------------------------
     // 2. UIの前面・背面管理（bringToFront）にショップを組み込むパッチ
-    // ★修正: ショップ(75) < インベントリ(80) < 個数選択(85) の順になるように調整
     // ----------------------------------------------------------------------
     const initBringToFrontHook = setInterval(() => {
         if (typeof window.bringToFront === 'function') {
@@ -52,20 +51,14 @@
                 const shopModal = document.getElementById('shopSellCountModal');
                 const invWin = document.getElementById('invWindow');
                 
-                // ベースのZ-index（ステータスの70より上に配置）
                 if (shopWin) shopWin.style.zIndex = 75;
                 if (shopModal) shopModal.style.zIndex = 85;
                 
-                // タップされたものを最前面にするが、ショップはインベントリを超えないようにする
                 if (windowId === 'shopWindow' && shopWin) shopWin.style.zIndex = 76;
                 if (windowId === 'shopSellCountModal' && shopModal) shopModal.style.zIndex = 86;
                 
-                // インベントリはショップより確実に手前に来るように補正
-                if (windowId === 'invWindow' && invWin) {
-                    invWin.style.zIndex = 80;
-                }
+                if (windowId === 'invWindow' && invWin) invWin.style.zIndex = 80;
                 
-                // 詳細ウィンドウは一番手前
                 const detail = document.getElementById('itemDetail');
                 if (detail && detail.style.display === 'flex') detail.style.zIndex = 90;
             };
@@ -73,16 +66,14 @@
     }, 100);
 
     // ----------------------------------------------------------------------
-    // 3. 枠外タップ時の【完全な】閉じる処理 ＆ キャラ移動防止
-    // ★修正: イベントのキャプチャフェーズで横取りし、キャラが動くのを完全にブロックします
+    // 3. 枠外タップ時の閉じる処理 ＆ キャラ移動防止
     // ----------------------------------------------------------------------
     document.addEventListener('pointerdown', (e) => {
         if (window.shopState && window.shopState.isOpen) {
             const isUI = e.target.closest('#shopWindow, #invWindow, #itemDetail, #statusWindow, #shopSellCountModal, .shop-tab, #playerWidget, #bottomUIContainer, #chatLogContent, #fullLogContent');
             
-            // UI以外（背景のマップやNPCなど）をタップした場合
             if (!isUI) {
-                e.stopPropagation(); // これで main.js へのタップ伝播を完全に遮断（キャラ移動防止）
+                e.stopPropagation(); 
                 e.preventDefault();
                 
                 if (typeof window.closeShopWindow === 'function') window.closeShopWindow();
@@ -103,7 +94,7 @@
     // ----------------------------------------------------------------------
     window.addEventListener('pointerup', (e) => {
         if (e.target.closest('#invWindow, #itemDetail, #statusWindow, #shopWindow, #shopSellCountModal, button, input, .shop-tab')) return;
-        if (window.shopState && window.shopState.isOpen) return; // 開いている時は判定しない
+        if (window.shopState && window.shopState.isOpen) return; 
         
         if (!window.player || !window.camera || window.isMapLoading) return;
         
@@ -165,7 +156,6 @@
             
             window.renderInventory = function() {
                 if (typeof window.validateShopCart === 'function') window.validateShopCart();
-                
                 origRender(); 
                 
                 const invContent = document.getElementById('invContent');
@@ -192,44 +182,40 @@
     }, 100);
 
     // ----------------------------------------------------------------------
-    // 7. インベントリからのD&D売却判定
-    // ★修正: pointerupのバグを取り除いたので、一番シンプルな本来の判定に戻しました
+    // 7. 【新機能】アイテムタップ時の詳細ウィンドウを「売却専用」にすり替える
+    // ※ 致命的なバグの原因だったD&Dフック(onItemDragEnd)は全廃し、これで完全に置き換えます。
     // ----------------------------------------------------------------------
-    setTimeout(() => {
-        const originalOnItemDragEnd = window.onItemDragEnd;
-        
-        window.onItemDragEnd = function(dropTarget) {
-            const shopWin = dropTarget ? dropTarget.closest('#shopWindow') : null;
+    const initShowDetailHook = setInterval(() => {
+        if (typeof window.showItemDetail === 'function') {
+            clearInterval(initShowDetailHook);
+            const origShowDetail = window.showItemDetail;
             
-            if (shopWin && window.shopState && window.shopState.isOpen && window.shopState.mode === 'sell') {
-                let targetSlotIdx = -1;
-                const shopSlot = dropTarget.closest('.shop-sell-slot');
-                
-                if (shopSlot) {
-                    targetSlotIdx = parseInt(shopSlot.dataset.slotIdx);
-                } else {
+            window.showItemDetail = function(item, slotElement) {
+                // ショップの「うる」モードが開いている時だけフック
+                if (window.shopState && window.shopState.isOpen && window.shopState.mode === 'sell') {
+                    
+                    // カートの空き枠を自動で探す
+                    let targetSlotIdx = -1;
                     for (let i = 0; i < window.shopState.cart.length; i++) {
                         if (!window.shopState.cart[i]) { targetSlotIdx = i; break; }
                     }
-                }
 
-                if (targetSlotIdx !== -1) {
-                    if (typeof window.promptShopSellCount === 'function') {
-                        window.promptShopSellCount(window.dragState.item, targetSlotIdx);
+                    if (targetSlotIdx !== -1) {
+                        // 空きがあれば、売却専用のポップアップを呼び出す
+                        if (typeof window.promptShopSellCount === 'function') {
+                            window.promptShopSellCount(item, targetSlotIdx);
+                        }
+                    } else {
+                        if (typeof window.addLog === 'function') window.addLog("<span class='color-sys'>売却カートがいっぱいです。</span>", "sys");
                     }
-                } else {
-                    if (typeof window.addLog === 'function') window.addLog("<span class='color-sys'>売却カートがいっぱいです。</span>", "sys");
+                    return; // 元の「使う」などの詳細ウィンドウは出さない
                 }
-                return true; 
-            }
-            
-            // ショップじゃない場所に落としたら、通常のショートカット等（または床）の処理へ戻す
-            if (typeof originalOnItemDragEnd === 'function') {
-                return originalOnItemDragEnd(dropTarget);
-            }
-            return false;
-        };
-    }, 2000); 
+                
+                // ショップが開いていなければ、今まで通り普通の詳細ウィンドウを出す
+                origShowDetail(item, slotElement);
+            };
+        }
+    }, 100);
 
     // ----------------------------------------------------------------------
     // 8. ショップウィンドウのスクロール操作の許可

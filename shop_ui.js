@@ -27,16 +27,13 @@
     window.initShopUI = function() {
         const shopWin = document.createElement('div');
         shopWin.id = 'shopWindow';
-        // ★修正: z-indexを「75」に設定。これでz-index:70のステータスウィンドウより確実に手前に表示されます。
+        // z-index:75でステータス(70)より確実に手前に表示
         shopWin.style.cssText = 'position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); display:none; flex-direction:column; width:95vw; max-width:850px; height:85vh; max-height:600px; background:rgba(20,20,30,0.95); border:2px solid #aaa; border-radius:8px; z-index:75; color:#fff; pointer-events:auto; touch-action:none; box-shadow:0 10px 30px rgba(0,0,0,0.9);';
         
-        // ★修正: ウィンドウ内のタップが背面のマップに貫通するのを防ぐ
         shopWin.addEventListener('pointerdown', (e) => {
-            e.stopPropagation(); // 貫通防止
+            e.stopPropagation();
             if(window.bringToFront) window.bringToFront('shopWindow');
         });
-        
-        // 【最重要修正】 pointerup の stopPropagation は D&D を破壊するため絶対に書かない！！！
 
         shopWin.innerHTML = `
             <div id="shopTitleBar" style="padding:10px; background:linear-gradient(to right, #445, #223); border-bottom:1px solid #777; border-radius:6px 6px 0 0; display:flex; justify-content:space-between; align-items:center;">
@@ -141,7 +138,6 @@
         document.getElementById('shopBuyMinus').onclick = () => updateBuyCount(window.shopState.buyCount - 1);
         document.getElementById('shopBuyPlus').onclick = () => updateBuyCount(window.shopState.buyCount + 1);
         
-        // スライダーに対するイベント干渉をブロックし、快適にドラッグできるようにする
         const buySlider = document.getElementById('shopBuySlider');
         buySlider.oninput = (e) => updateBuyCount(parseInt(e.target.value));
         buySlider.addEventListener('pointerdown', (e) => e.stopPropagation());
@@ -191,7 +187,6 @@
         shopWin.style.display = 'flex';
         
         if(window.bringToFront) window.bringToFront('shopWindow');
-        
         window.renderShopUI();
     };
 
@@ -200,9 +195,7 @@
         document.getElementById('shopWindow').style.display = 'none';
         window.shopState.cart = Array(24).fill(null); 
         
-        if (window.player) {
-            window.player.targetNpc = null;
-        }
+        if (window.player) window.player.targetNpc = null;
 
         if (window.invWindow && window.invWindow.style.display === 'flex') { if(typeof window.toggleInventory === 'function') window.toggleInventory(); }
         if (typeof window.renderInventory === 'function') window.renderInventory();
@@ -373,6 +366,7 @@
         }
     };
 
+    // ★修正: タップ時に開く、美しく機能的な「売却専用ポップアップ」に進化させました！
     window.promptShopSellCount = function(item, slotIdx) {
         if (!item) return;
         let modal = document.getElementById('shopSellCountModal');
@@ -389,13 +383,19 @@
         }
         
         let currentVal = 1; const maxVal = item.count;
+        const unitPrice = Math.floor((item.price || 0) / 10);
+        const descText = (item.desc || '').replace(/\\n/g, '<br>');
         
         modal.innerHTML = `
-            <div style="font-weight:bold; text-align:center; margin-bottom:15px;">売却する個数を選択</div>
-            <div style="display:flex; justify-content:center; align-items:center; gap:10px; margin-bottom:15px;">
-                <div style="width:40px; height:40px; background:#000; border:1px solid #777; border-radius:4px; display:flex; justify-content:center; align-items:center; font-size:24px;">${window.getItemIconHTML(item)}</div>
-                <div style="font-weight:bold;">${item.name}</div>
+            <div style="font-weight:bold; text-align:center; margin-bottom:10px; font-size:16px;">売却リストに追加</div>
+            
+            <div style="display:flex; flex-direction:column; align-items:center; gap:5px; margin-bottom:10px; padding:10px; background:rgba(0,0,0,0.3); border-radius:6px;">
+                <div style="width:44px; height:44px; background:#000; border:1px solid #777; border-radius:4px; display:flex; justify-content:center; align-items:center; font-size:24px;">${window.getItemIconHTML(item)}</div>
+                <div style="font-weight:bold; font-size:14px; text-align:center;">${item.name}</div>
+                <div style="font-size:11px; color:#ccc; line-height:1.4; text-align:center;">${descText}</div>
+                <div style="font-size:12px; color:#ffd700; margin-top:5px;">単価: ${unitPrice} G</div>
             </div>
+            
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
                 <button id="shopSellCountMinus" style="width:40px; height:40px; background:#555; color:#fff; border:none; border-radius:4px; font-size:20px; font-weight:bold;">-</button>
                 <div id="shopSellCountText" style="font-size:20px; font-weight:bold;">${currentVal}</div>
@@ -404,7 +404,7 @@
             <input type="range" id="shopSellCountSlider" min="1" max="${maxVal}" value="${currentVal}" style="width:100%; margin-bottom:20px;">
             <div style="display:flex; gap:10px;">
                 <button id="shopSellCountCancel" style="flex:1; padding:10px; background:#555; color:#fff; border:none; border-radius:4px; font-weight:bold; cursor:pointer;">キャンセル</button>
-                <button id="shopSellCountOk" style="flex:1; padding:10px; background:#e94560; color:#fff; border:none; border-radius:4px; font-weight:bold; cursor:pointer;">カートへ</button>
+                <button id="shopSellCountOk" style="flex:1; padding:10px; background:#e94560; color:#fff; border:none; border-radius:4px; font-weight:bold; cursor:pointer;">リストに追加</button>
             </div>
         `;
         modal.style.display = 'flex';
