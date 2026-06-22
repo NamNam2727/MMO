@@ -40,7 +40,6 @@ window.compressStacks = function() {
         for (let i = 0; i < items.length; i++) {
             const item = items[i];
             if (item.maxStack > 1) {
-                // ★修正: IDとレアリティをくっつけた専用キーを作成
                 const groupKey = item.id + '_' + item.rarity;
                 if (!itemsById[groupKey]) itemsById[groupKey] = [];
                 itemsById[groupKey].push(item);
@@ -80,7 +79,6 @@ window.compressStacks = function() {
             
             for (let i = items.length - 1; i >= 0; i--) {
                 const item = items[i];
-                // ★修正: IDとレアリティをくっつけたキーで削除判定を行う
                 const checkKey = item.id + '_' + item.rarity;
                 if (item.maxStack > 1 && checkKey === id && item.count <= 0) {
                     items.splice(i, 1);
@@ -91,7 +89,6 @@ window.compressStacks = function() {
 };
 
 window.renderInventory = function() {
-    // プレイヤーがいない場合は描画しない
     if (!window.player || !window.player.inventory) return;
 
     if (window.ITEM_DB) {
@@ -136,17 +133,19 @@ window.renderInventory = function() {
             slot.classList.add(`rarity-${item.rarity}`);
             const rarityColor = window.RARITY && window.RARITY[item.rarity] ? window.RARITY[item.rarity].color : '#fff';
             
+            // ★変更: 暗転ゲージに z-index: 10 を付与して常に手前に表示させる
             let ctOverlay = '';
             if (item.type === 'consume' || item.type === 'skill') {
-                ctOverlay = `<div class="ct-overlay" data-ct-id="${item.id}" style="position: absolute; bottom: 0; left: 0; width: 100%; background: rgba(0,0,0,0.7); height: 0%;"></div>`;
+                ctOverlay = `<div class="ct-overlay" data-ct-id="${item.id}" style="position: absolute; bottom: 0; left: 0; width: 100%; background: rgba(0,0,0,0.7); height: 0%; z-index: 10;"></div>`;
             }
 
             slot.innerHTML = `<div class="item-icon" style="background-color: ${item.color}; border: 2px solid ${rarityColor}; box-sizing: border-box; position: relative; overflow: hidden; border-radius: 50%; display:flex; justify-content:center; align-items:center;">${ctOverlay}</div>`;
             
+            // ★変更: 絵文字アイコンは z-index: 5 として、暗転ゲージの下に潜らせる
             if (item.type === 'skill' && item.icon) {
                 const iconDiv = slot.querySelector('.item-icon');
                 if (iconDiv && !iconDiv.querySelector('.emoji-icon')) {
-                    iconDiv.innerHTML += `<span class="emoji-icon" style="position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); font-size:24px; line-height:1;">${item.icon}</span>`;
+                    iconDiv.innerHTML += `<span class="emoji-icon" style="position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); font-size:24px; line-height:1; z-index: 5;">${item.icon}</span>`;
                 }
             }
 
@@ -273,7 +272,6 @@ window.switchTab = function(index) {
 };
 
 window.toggleInventory = function() {
-    // ★追加: プレイヤーが存在しない場合は開かないようブロック
     if (!window.player || !window.invWindow) return;
     
     const itemDetail = document.getElementById('itemDetail');

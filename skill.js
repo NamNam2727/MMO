@@ -14,7 +14,6 @@
         if (!document.getElementById('skillStyle')) {
             const style = document.createElement('style');
             style.id = 'skillStyle';
-            // ★変更: #buffContainer の絶対座標(top, left)指定を削除し、動的配置に任せる
             style.innerHTML = `
                 #buffContainer { position: absolute; display: flex; gap: 8px; pointer-events: auto; z-index: 55; }
                 .buff-slot { width: 32px; height: 32px; background: rgba(20,20,20,0.8); border: 1px solid #777; border-radius: 4px; position: relative; cursor: pointer; display: flex; justify-content: center; align-items: center; box-shadow: 0 2px 4px rgba(0,0,0,0.5); }
@@ -239,16 +238,7 @@
             }
         }
 
-        document.querySelectorAll('.ct-overlay, .ct-overlay-sc').forEach(overlay => {
-            const id = overlay.getAttribute('data-ct-id');
-            if (window.itemCooldowns && window.itemCooldowns[id] > 0) {
-                const maxCt = (window.itemMaxCooldowns && window.itemMaxCooldowns[id]) ? window.itemMaxCooldowns[id] : 3.0;
-                const ratio = window.itemCooldowns[id] / maxCt;
-                overlay.style.height = `${ratio * 100}%`;
-            } else {
-                overlay.style.height = `0%`;
-            }
-        });
+        // ★変更: inventory_action.js と skill.js で二重に行われていたCTの暗転UI処理を inventory_action.js 側に一本化するため削除しました。
 
         if (window.player && window.player.activeBuffs) {
             let buffsChanged = false;
@@ -314,11 +304,9 @@
         const container = document.getElementById('buffContainer');
         if (!container) return;
 
-        // ★変更: プレイヤーウィジェットの現在の座標から相対位置でバフを配置
         const pWidget = document.getElementById('playerWidget');
         if (pWidget) {
             const rect = pWidget.getBoundingClientRect();
-            // playerWidget の左上角を基準に配置 (例: 下に65px, 右に5px)
             container.style.top = (rect.top + 65) + 'px';
             container.style.left = (rect.left + 5) + 'px';
         }
@@ -413,7 +401,7 @@
             window.player.hp = Math.max(1, window.player.hp - hpCost);
         }
         if(typeof window.updateWidgetUI === 'function') window.updateWidgetUI();
-        if (typeof window.addLog === 'function') window.addLog(`<span class='color-status'>${skill.name} を発動！</span>`, 'sys');
+        if (typeof window.addLog === 'function') window.addLog(`<span class='color-status'>${skill.name} を発発！</span>`, 'sys');
 
         let targets = [];
         if (targetType === 'self') {
@@ -511,8 +499,10 @@
     }
 
     // --- 4. 既存関数のオーバーライド（フック） ---
+    // ★変更: inventory_ui.js と shortcut.js 側でアイコン描画が完結するようになったため、
+    //        余分なアイコン追加フック(renderInventory, renderShortcutPages)を削除し、ステータス計算系のみ残しました。
     const waitBaseFunctions = setInterval(() => {
-        if (window.updatePlayerStats && window.applyElementEffect && window.renderInventory && window.renderShortcutPages) {
+        if (window.updatePlayerStats && window.applyElementEffect) {
             clearInterval(waitBaseFunctions);
             overrideBaseFunctions();
         }
@@ -575,49 +565,6 @@
             }
             if (hasIceImmune && element === 'ice') return;
             if (origApplyElementEffect) origApplyElementEffect(attacker, target, element, params, skillId);
-        };
-
-        const origRenderInventory = window.renderInventory;
-        window.renderInventory = function() {
-            if (origRenderInventory) origRenderInventory();
-            for (const tab in window.player.inventory) {
-                window.player.inventory[tab].items.forEach((item, idx) => {
-                    if (item.type === 'skill' && item.icon) {
-                        if (window.tabsList[window.currentTabIndex] === tab) {
-                            const slot = document.querySelector(`.inv-slot[data-idx="${idx}"] .item-icon`);
-                            if (slot) {
-                                if (!slot.querySelector('.ct-overlay')) {
-                                    slot.innerHTML = `<div class="ct-overlay" data-ct-id="${item.id}" style="position: absolute; bottom: 0; left: 0; width: 100%; background: rgba(0,0,0,0.7); height: 0%;"></div>` + slot.innerHTML;
-                                }
-                                if (!slot.querySelector('.emoji-icon')) {
-                                    slot.innerHTML += `<span class="emoji-icon" style="position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); font-size:24px; line-height:1;">${item.icon}</span>`;
-                                }
-                            }
-                        }
-                    }
-                });
-            }
-        };
-
-        const origRenderShortcutPages = window.renderShortcutPages;
-        window.renderShortcutPages = function() {
-            if (origRenderShortcutPages) origRenderShortcutPages();
-            if (!window.player || !window.player.shortcuts) return;
-            window.player.shortcuts.forEach((scData, globalIdx) => {
-                if (scData && scData.type === 'skill') {
-                    let actualItem = null;
-                    for (const tab in window.player.inventory) {
-                        actualItem = window.player.inventory[tab].items.find(i => i.uid === scData.uid);
-                        if(actualItem) break;
-                    }
-                    if (actualItem && actualItem.icon) {
-                        const slot = document.querySelector(`.shortcut-slot[data-sc-idx="${globalIdx}"] .item-icon`);
-                        if (slot && !slot.querySelector('.emoji-icon')) {
-                            slot.innerHTML += `<span class="emoji-icon" style="position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); font-size:24px; line-height:1;">${actualItem.icon}</span>`;
-                        }
-                    }
-                }
-            });
         };
     }
 })();

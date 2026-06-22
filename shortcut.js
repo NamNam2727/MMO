@@ -3,7 +3,6 @@
 // ショートカットのUI、スワイプ操作、ドラッグ＆ドロップ制御、実行処理
 // =========================================================
 
-// ショートカット グローバル状態
 window.scCurrentPage = 0;
 window.isScSlotDragging = false;
 window.justDroppedSc = false;
@@ -13,7 +12,6 @@ window.scLastY = 0;
 window.scSwipeActive = false;
 
 window.initShortcutUI = function() {
-    // ★欠落していた初期化コードを復旧
     if (!window.player) return;
     if (!window.player.shortcuts) window.player.shortcuts = Array(30).fill(null);
 
@@ -80,7 +78,6 @@ window.initShortcutUI = function() {
         });
     }
 
-    // --- ショートカット用 グローバル D&Dイベント ---
     if (!window.__scDndEventsRegistered) {
         window.__scDndEventsRegistered = true;
         
@@ -173,7 +170,6 @@ window.registerShortcut = function(scIdx, item) {
 };
 
 window.renderShortcutPages = function() {
-    // ★念のため、ここでも安全策として初期化を確認
     if (!window.player) return;
     if (!window.player.shortcuts) window.player.shortcuts = Array(30).fill(null);
     
@@ -237,9 +233,11 @@ window.populateShortcutPage = function(container, pageIndex) {
                 window.player.shortcuts[globalIdx] = null;
             } else {
                 const rarityColor = window.RARITY && window.RARITY[scData.rarity] ? window.RARITY[scData.rarity].color : '#fff';
+                
+                // ★変更: スキルの場合もCTバーを表示し、z-index: 10 を付与
                 let ctOverlay = '';
-                if (scData.type === 'consume') {
-                    ctOverlay = `<div class="ct-overlay-sc" data-ct-id="${scData.id}" style="position: absolute; bottom: 0; left: 0; width: 100%; background: rgba(0,0,0,0.7); height: 0%;"></div>`;
+                if (scData.type === 'consume' || scData.type === 'skill') {
+                    ctOverlay = `<div class="ct-overlay-sc" data-ct-id="${scData.id}" style="position: absolute; bottom: 0; left: 0; width: 100%; background: rgba(0,0,0,0.7); height: 0%; z-index: 10;"></div>`;
                 }
                 
                 slot.innerHTML = `
@@ -248,10 +246,11 @@ window.populateShortcutPage = function(container, pageIndex) {
                     </div>
                 `;
                 
+                // ★変更: 絵文字アイコンは z-index: 5 として、暗転ゲージの下に潜らせる
                 if (actualItem && actualItem.type === 'skill' && actualItem.icon) {
                     const iconDiv = slot.querySelector('.item-icon');
                     if (iconDiv && !iconDiv.querySelector('.emoji-icon')) {
-                        iconDiv.innerHTML += `<span class="emoji-icon" style="position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); font-size:24px; line-height:1;">${actualItem.icon}</span>`;
+                        iconDiv.innerHTML += `<span class="emoji-icon" style="position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); font-size:24px; line-height:1; z-index: 5;">${actualItem.icon}</span>`;
                     }
                 }
 
